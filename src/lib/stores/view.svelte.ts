@@ -12,7 +12,7 @@ export type DisplayStyle = 'prose' | 'chips' | 'graph';
 
 class ViewStore {
 	/** Current app mode: editing input or exploring noise. */
-	mode: AppMode = $state('edit');
+	mode: AppMode = $state('explore');
 	/** Display style for the noisy view. */
 	display: DisplayStyle = $state('prose');
 	/** Whether the advanced technical panel is open. */

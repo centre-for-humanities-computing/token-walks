@@ -3,11 +3,13 @@
 		t: number;
 		T: number;
 		disabled: boolean;
+		/** Whether the total-steps field can be edited. Default true. */
+		editableT?: boolean;
 		ontchange: (t: number) => void;
-		onTchange: (T: number) => void;
+		onTchange?: (T: number) => void;
 	}
 
-	let { t, T, disabled, ontchange, onTchange }: Props = $props();
+	let { t, T, disabled, editableT = true, ontchange, onTchange }: Props = $props();
 
 	/** Fraction $t/T$, formatted to 3 decimal places. */
 	const fraction = $derived(T > 0 ? (t / T).toFixed(3) : '0.000');
@@ -23,7 +25,7 @@
 	/** Commit an edited max value; ignore non-positive input. */
 	function commitT(e: Event) {
 		const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-		if (n >= 1) onTchange(n);
+		if (n >= 1) onTchange?.(n);
 	}
 </script>
 
@@ -36,17 +38,21 @@
 	>
 	<span class="readout">
 		t = {t} /
-		<input
-			class="t-max"
-			type="number"
-			min="1"
-			max="1000"
-			step="1"
-			value={T}
-			aria-label="Total number of timesteps"
-			{disabled}
-			onchange={commitT}
-		/>
+		{#if editableT}
+			<input
+				class="t-max"
+				type="number"
+				min="1"
+				max="1000"
+				step="1"
+				value={T}
+				aria-label="Total number of timesteps"
+				{disabled}
+				onchange={commitT}
+			/>
+		{:else}
+			<span class="t-max" data-testid="t-max">{T}</span>
+		{/if}
 		({fraction})
 	</span>
 	<input

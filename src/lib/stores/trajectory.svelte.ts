@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { HandWalk } from '$lib/engine/hand-walk.js';
 import { randomSeed } from '$lib/engine/rng.js';
 import { TrajectoryCache, hashIds } from '$lib/engine/trajectory-cache.js';
 import type { Trajectory, TrajectorySpec } from '$lib/engine/types.js';
@@ -63,6 +64,8 @@ class TrajectoryStore {
 	private _worker: Worker | null = null;
 	/** In-memory trajectory cache. */
 	private _cache = new TrajectoryCache();
+	/** The hand-walk trail behind the displayed rows, when one is active. */
+	private _trail: HandWalk | null = null;
 	/** Re-entrancy guard: true while a compute is in flight. */
 	private _computing = false;
 	/** The spec for the in-flight (or most recent) request, for caching. */
@@ -136,6 +139,71 @@ class TrajectoryStore {
 	 */
 	reroll(): void {
 		this.seed = randomSeed();
+	}
+
+	/**
+	 * Open a hand-walk timeline with one row — the encoded input — and no
+	 * future. Nothing is computed or cached; later jumps append rows.
+	 *
+	 * @param inputIds - Row $0$, length $L$.
+	 * @param opts - Vocabulary size for display and the jump horizon.
+	 */
+	begin(inputIds: Int32Array, opts: { vocabSize: number; maxSteps: number }): void {
+		this._trail = new HandWalk(inputIds, opts.maxSteps);
+
+		// Invalidate any in-flight film-era compute so its result cannot
+		// replace the hand-walk row.
+		this._requestId++;
+		this._computing = false;
+		this._pendingSpec = null;
+		this._queuedSpec = null;
+		this._stopElapsed();
+
+		this.vocabSize = opts.vocabSize;
+		this.t = 0;
+		this.status = 'ready';
+		this.error = null;
+		this.progress = 1;
+		this.phase = null;
+		this.trajectory = this._wrapTrail(this._trail);
+	}
+
+	/**
+	 * Append one row from the visible row: replace `position` with
+	 * `tokenId`, copy every other cell, discard the future, and follow the
+	 * new tail. Returns false when there is no trail or the jump is out of
+	 * range.
+	 */
+	jump(position: number, tokenId: number): boolean {
+		const trail = this._trail;
+		if (!trail || !trail.jump(this.t, position, tokenId)) return false;
+		this.trajectory = this._wrapTrail(trail);
+		this.t = trail.T;
+		return true;
+	}
+
+	/** Pop the tail row and follow it. A no-op at $T = 0$ or when scrubbed back. */
+	undo(): boolean {
+		const trail = this._trail;
+		if (!trail || this.t !== trail.T || !trail.undo()) return false;
+		this.trajectory = this._wrapTrail(trail);
+		this.t = trail.T;
+		return true;
+	}
+
+	/** Wrap the trail's built rows in the display `Trajectory` shape. */
+	private _wrapTrail(trail: HandWalk): Trajectory {
+		const rows = trail.rows;
+		const length = trail.length;
+		return {
+			rows,
+			T: trail.T,
+			length,
+			seed: this.seed,
+			tokensAt(t: number): Int32Array {
+				return rows.subarray(t * length, (t + 1) * length);
+			},
+		};
 	}
 
 	/**

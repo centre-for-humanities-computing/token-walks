@@ -136,10 +136,8 @@
 		return info ? info.gloss : '';
 	});
 
-	const canStep = $derived(
-		(trajectoryStore.status === 'ready' || trajectoryStore.status === 'computing') &&
-			scheduleStore.T > 0,
-	);
+	const maxStep = $derived(trajectoryStore.trajectory?.T ?? 0);
+	const canStep = $derived(trajectoryStore.status === 'ready' && maxStep > 0);
 
 	function handleKeydown(e: KeyboardEvent) {
 		// Ignore when focus is inside a text input, textarea, or select.
@@ -154,7 +152,7 @@
 		} else if (e.key === 'ArrowRight') {
 			e.preventDefault();
 			const next = trajectoryStore.t + 1;
-			if (next <= scheduleStore.T) trajectoryStore.t = next;
+			if (next <= maxStep) trajectoryStore.t = next;
 		}
 	}
 
@@ -334,28 +332,6 @@
 		return n;
 	});
 
-	// Trajectory computation status suffix for the status line:
-	// phase label + percentage once a phase is known (+ elapsed seconds
-	// after the first second).
-	const trajStatus = $derived.by(() => {
-		if (trajectoryStore.status !== 'computing') return '';
-		const phase = trajectoryStore.phase;
-		const label =
-			phase === 'preparing'
-				? 'Preparing vocabulary'
-				: phase === 'materializing'
-					? 'Preparing vectors'
-					: phase === 'embeddings'
-						? 'Computing embedding neighbours'
-						: 'Computing trajectory';
-		const pctPart = phase !== null ? ` ${Math.round(trajectoryStore.progress * 100)}%` : '';
-		const elapsedPart =
-			trajectoryStore.elapsed >= 1 ? ` (${trajectoryStore.elapsed.toFixed(1)}s)` : '';
-		return ` · ${label}…${pctPart}${elapsedPart}`;
-	});
-
-	const progressPct = $derived(Math.round(trajectoryStore.progress * 100));
-
 	const statusText = $derived.by(() => {
 		const s = tokenizerStore.status;
 		if (s === 'loading') {
@@ -376,12 +352,10 @@
 			const changedPart = changedCount !== null ? ` · ${changedCount} changed this step` : '';
 			const oovPart =
 				encoded.vocabSize > t.vocabSize ? ` (+${encoded.vocabSize - t.vocabSize} OOV)` : '';
-			return `${t.info.label} · Vocab: ${formatCount(t.vocabSize)}${oovPart} · Tokens: ${encoded.ids.length}${strategyLabel}${coveragePart}${trajStatus}${changedPart}`;
+			return `${t.info.label} · Vocab: ${formatCount(t.vocabSize)}${oovPart} · Tokens: ${encoded.ids.length}${strategyLabel}${coveragePart}${changedPart}`;
 		}
 		return 'Select a tokenizer';
 	});
-
-	const isComputing = $derived(trajectoryStore.status === 'computing');
 
 	// When the tokenizer becomes ready, instantiate the selected strategy
 	// with the current vocab size. Re-instantiates on tokenizer or strategy change.
@@ -398,30 +372,17 @@
 		scheduleStore.selectSchedule(scheduleStore.currentId);
 	});
 
-	// Request trajectory computation whenever inputs change. The store call is
-	// untracked: a cache hit clamps `t`, and that read must not re-run this
-	// effect on every slider move. Skipped in edit mode: nothing displays a
-	// trajectory there, and selecting embedding-knn would otherwise fetch its
-	// bundle before the visitor presses "Walk it".
+	// Open (or reset) the hand-walk timeline whenever the encoded input
+	// changes. Strategy and schedule changes leave the built rows alone: only
+	// later jumps and inspector reads use the new kernel (AC8). Nothing is
+	// computed or cached on the way in.
 	$effect(() => {
 		if (viewStore.mode !== 'explore') return;
 		const ids = encoded.ids;
-		const tok = tokenizerStore.tokenizer;
-		if (!tok || ids.length === 0) return;
-
-		const spec = {
-			inputIds: ids,
-			strategyId: strategyStore.currentId,
-			strategyConfig: activeStrategyConfig(encoded.vocabSize),
-			scheduleId: scheduleStore.currentId,
-			scheduleConfig: scheduleStore.config,
-			T: scheduleStore.T,
-			vocabSize: encoded.vocabSize,
-			seed: trajectoryStore.seed,
-			tokenizerId: tokenizerStore.currentId,
-			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
-		};
-		untrack(() => trajectoryStore.request(spec));
+		if (!tokenizerStore.tokenizer || ids.length === 0) return;
+		untrack(() =>
+			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T }),
+		);
 	});
 
 	onMount(() => {
@@ -549,23 +510,7 @@
 						}}
 					/>
 				</div>
-				{#if isComputing}
-					<div
-						class="traj-progress"
-						role="progressbar"
-						aria-label="Computing trajectory"
-						aria-valuemin="0"
-						aria-valuemax="100"
-						aria-valuenow={trajectoryStore.phase === 'walking' ? progressPct : undefined}
-					>
-						<div
-							class="traj-progress-fill"
-							class:indeterminate={trajectoryStore.phase !== 'walking'}
-							style:transform={`scaleX(${trajectoryStore.progress})`}
-						></div>
-					</div>
-				{/if}
-				<div class="tokens-area" class:computing={isComputing} data-testid="output">
+				<div class="tokens-area" data-testid="output">
 					{#if viewStore.display === 'chips'}
 						<TokenChips
 							tokens={displayTokens.tokens}
@@ -603,13 +548,21 @@
 
 		<TimeSlider
 			t={trajectoryStore.t}
-			T={scheduleStore.T}
-			disabled={trajectoryStore.status !== 'ready' && trajectoryStore.status !== 'computing'}
+			T={maxStep}
+			disabled={trajectoryStore.status !== 'ready'}
+			editableT={false}
 			ontchange={(t) => {
 				trajectoryStore.t = t;
 			}}
-			onTchange={(n) => scheduleStore.setT(n)}
 		/>
+
+		<button
+			class="undo-btn"
+			disabled={maxStep === 0 || trajectoryStore.t !== maxStep}
+			onclick={() => trajectoryStore.undo()}
+		>
+			Undo
+		</button>
 
 		<BetaReadout t={trajectoryStore.t} schedule={scheduleStore.instance} />
 
@@ -619,9 +572,6 @@
 			data-testid="app-status"
 			data-trajectory-status={trajectoryStore.status}
 		>
-			{#if isComputing}
-				<span class="throbber" aria-hidden="true"></span>
-			{/if}
 			{statusText}
 		</div>
 
@@ -859,21 +809,6 @@
 	.status.error {
 		color: #c00;
 	}
-	.throbber {
-		display: inline-block;
-		width: 12px;
-		height: 12px;
-		border: 2px solid #ccc;
-		border-top-color: #555;
-		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
-		flex-shrink: 0;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 	textarea {
 		width: 100%;
 		box-sizing: border-box;
@@ -895,47 +830,5 @@
 	}
 	.tokens-area {
 		transition: opacity 0.15s;
-	}
-	.tokens-area.computing {
-		opacity: 0.5;
-	}
-	/* Thin bar floating in the gap above the tokens area. Determinate while
-	   walking; a shimmer while preparing (or before the first progress
-	   message). Fades in after 250ms so quick or cached runs never flash it. */
-	.traj-progress {
-		position: absolute;
-		top: -0.75rem;
-		left: 0;
-		right: 0;
-		height: 3px;
-		border-radius: 2px;
-		background: #e5e7eb;
-		overflow: hidden;
-		animation: progress-in 0.2s ease 0.25s backwards;
-	}
-	.traj-progress-fill {
-		height: 100%;
-		background: #2563eb;
-		transform-origin: 0 50%;
-		transition: transform 0.15s linear;
-	}
-	/* Indeterminate phase: the running animation overrides the inline
-	   scaleX transform (animations outrank inline styles in the cascade). */
-	.traj-progress-fill.indeterminate {
-		width: 33%;
-		animation: progress-shimmer 1.2s ease-in-out infinite;
-	}
-	@keyframes progress-in {
-		from {
-			opacity: 0;
-		}
-	}
-	@keyframes progress-shimmer {
-		from {
-			transform: translateX(-100%);
-		}
-		to {
-			transform: translateX(400%);
-		}
 	}
 </style>
