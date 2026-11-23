@@ -4,9 +4,13 @@
 
 	interface Props {
 		graph: NeighborGraph;
+		/** Token id at the focused step; ringed and used as the ramp's top. */
+		focusId: number;
+		/** Step the graph is focused on. */
+		focusStep: number;
 	}
 
-	let { graph }: Props = $props();
+	let { graph, focusId, focusStep }: Props = $props();
 
 	const WIDTH = 360;
 	const HEIGHT = 260;
@@ -17,7 +21,7 @@
 	 * t$). Neighborhood elements inherit their anchor's saturation but
 	 * stay muted (lower opacity) so the trajectory reads on top.
 	 */
-	const maxStep = $derived(Math.max(1, ...graph.nodes.map((n) => n.anchorStep)));
+	const maxStep = $derived(Math.max(1, focusStep));
 
 	/** Saturation ramp $[0, 1]$: 0 = pale origin, 1 = full current. */
 	function ramp(step: number): number {
@@ -232,7 +236,7 @@
 	{#each graph.nodes.filter((n) => n.role === 'trajectory') as n (`t${n.id}`)}
 		{@const p = pos.get(`${n.id}`)}
 		{#if p}
-			<g class="node traj" class:current={n.anchorStep === maxStep}>
+			<g class="node traj" class:current={n.id === focusId}>
 				<circle cx={p.x} cy={p.y} r={6} style="fill: {nodeFill('trajectory', n.anchorStep)}" />
 				<text x={p.x} y={p.y - 9} text-anchor="middle" class="label-traj">{short(n.label)}</text>
 			</g>

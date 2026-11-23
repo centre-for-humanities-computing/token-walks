@@ -9,9 +9,11 @@
 		onhover?: (tokenId: number, index: number, rect: DOMRect) => void;
 		/** Called when the pointer leaves a token span. */
 		onunhover?: () => void;
+		/** Called on click/Enter/Space to pin the inspector. */
+		onpin?: (tokenId: number, index: number, rect: DOMRect) => void;
 	}
 
-	let { text, spans = [], onhover, onunhover }: Props = $props();
+	let { text, spans = [], onhover, onunhover, onpin }: Props = $props();
 
 	/**
 	 * Split `text` into per-token segments. Each span contributes its slice
@@ -61,7 +63,14 @@
 					onmouseleave={() => onunhover?.()}
 					onfocus={(e) =>
 						onhover?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect())}
-					onblur={() => onunhover?.()}>{seg.text}</span
+					onblur={() => onunhover?.()}
+					onclick={(e) =>
+						onpin?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect())}
+					onkeydown={(e) => {
+						if (e.key !== 'Enter' && e.key !== ' ') return;
+						e.preventDefault();
+						onpin?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect());
+					}}>{seg.text}</span
 				>
 			{:else}
 				{seg.text}

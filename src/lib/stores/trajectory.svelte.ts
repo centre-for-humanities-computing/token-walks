@@ -225,6 +225,8 @@ class TrajectoryStore {
 		/** Append-only OOV table: index `i` has id `Tokenizer.vocabSize + i`. */
 		oovTokens?: readonly string[];
 		column: Int32Array;
+		/** Step in `column` to focus: only this node's 1-hop neighbors are drawn. */
+		focusStep: number;
 		betas: Float32Array;
 		limitMode: 'top-k' | 'top-p';
 		k: number;

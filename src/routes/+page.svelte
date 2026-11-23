@@ -143,6 +143,10 @@
 		// Ignore when focus is inside a text input, textarea, or select.
 		const tag = (e.target as HTMLElement).tagName;
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+		if (e.key === 'Escape' && pinned) {
+			unpin();
+			return;
+		}
 		if (!canStep) return;
 
 		if (e.key === 'ArrowLeft') {
@@ -250,6 +254,8 @@
 
 	type HoverState = {
 		tokenId: number;
+		index: number;
+		step: number;
 		x: number;
 		y: number;
 		status: 'loading' | 'ready' | 'error' | 'unavailable';
@@ -257,39 +263,37 @@
 	};
 
 	let hover: HoverState | null = $state(null);
+	/** True while a click pinned the inspector at a position and time. */
+	let pinned: boolean = $state(false);
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let hoverQueryId = 0;
 
 	/**
-	 * Handle token hover from either view: record the anchor, then query
-	 * the worker for the inspection graph (trajectory + 1-hop neighborhood).
-	 *
-	 * Works for every strategy: neighborhood strategies (lexical,
-	 * char-overlap) also get the 1-hop neighborhood; others (identity,
-	 * uniform, absorbing) get the trajectory only.
+	 * Query the worker for the inspection graph at one position and step:
+	 * the trajectory chain plus only that step's 1-hop neighborhood.
 	 */
-	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
+	function queryInspector(
+		tokenId: number,
+		index: number,
+		x: number,
+		y: number,
+		step: number,
+	): void {
 		const tok = tokenizerStore.tokenizer;
 		const traj = trajectoryStore.trajectory;
 		if (!tok || !traj) return;
 
-		// Word whitespace is frozen, so its inspector would only repeat the
-		// same token; skip it. Punctuation stays inspectable.
-		const displayed = displayTokens.tokens[index];
-		if (tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n')) return;
+		hover = { tokenId, index, step, x, y, status: 'loading', graph: null };
 
-		hover = { tokenId, x: rect.left, y: rect.top, status: 'loading', graph: null };
-
-		// Trajectory column for this position: $x_0, \ldots, x_t$. The rows
-		// buffer is flat $(T+1) \times L$, so gather position `index` per step.
-		const t = trajectoryStore.t;
+		// Trajectory column for this position: $x_0, \ldots, x_{\text{step}}$.
+		// The rows buffer is flat $(T+1) \times L$, so gather `index` per step.
 		const L = traj.length;
-		const column = new Int32Array(t + 1);
-		for (let s = 0; s <= t; s++) column[s] = traj.rows[s * L + index]!;
+		const column = new Int32Array(step + 1);
+		for (let s = 0; s <= step; s++) column[s] = traj.rows[s * L + index]!;
 		// Schedule $\beta$ values for the steps taken so far.
 		const schedule = scheduleStore.instance;
-		const betas = new Float32Array(t);
-		for (let s = 0; s < t; s++) betas[s] = schedule ? schedule.beta(s) : 0;
+		const betas = new Float32Array(step);
+		for (let s = 0; s < step; s++) betas[s] = schedule ? schedule.beta(s) : 0;
 
 		const queryId = ++hoverQueryId;
 		trajectoryStore
@@ -300,6 +304,7 @@
 				vocabSize: trajectoryStore.vocabSize,
 				oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 				column,
+				focusStep: step,
 				betas,
 				limitMode: inspectionStore.limitMode,
 				k: inspectionStore.k,
@@ -307,16 +312,50 @@
 			})
 			.then((graph) => {
 				// Ignore stale results (mouse moved to another token).
-				if (queryId !== hoverQueryId || !hover || hover.tokenId !== tokenId) return;
-				hover = { tokenId, x: hover.x, y: hover.y, status: 'ready', graph };
+				if (queryId !== hoverQueryId) return;
+				hover = { tokenId, index, step, x, y, status: 'ready', graph };
 			})
 			.catch(() => {
-				if (queryId !== hoverQueryId || !hover || hover.tokenId !== tokenId) return;
-				hover = { tokenId, x: hover.x, y: hover.y, status: 'error', graph: null };
+				if (queryId !== hoverQueryId) return;
+				hover = { tokenId, index, step, x, y, status: 'error', graph: null };
 			});
 	}
 
+	/** White-space is frozen; its inspector would only repeat itself. */
+	function skipInspect(index: number): boolean {
+		const displayed = displayTokens.tokens[index];
+		return tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n');
+	}
+
+	/**
+	 * Hover previews the inspector but never pins. While a token is pinned,
+	 * pointer movement into the tooltip must not close or replace it.
+	 */
+	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
+		const tok = tokenizerStore.tokenizer;
+		const traj = trajectoryStore.trajectory;
+		if (!tok || !traj || pinned || skipInspect(index)) return;
+		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	}
+
+	/** Click/Enter/Space pins the clicked position and time. */
+	function handleTokenPin(tokenId: number, index: number, rect: DOMRect): void {
+		const tok = tokenizerStore.tokenizer;
+		const traj = trajectoryStore.trajectory;
+		if (!tok || !traj || skipInspect(index)) return;
+		pinned = true;
+		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	}
+
+	/** Escape or the close button removes the pinned inspector. */
+	function unpin(): void {
+		pinned = false;
+		hoverQueryId++;
+		hover = null;
+	}
+
 	function handleTokenUnhover(): void {
+		if (pinned) return;
 		hoverQueryId++;
 		hover = null;
 	}
@@ -518,6 +557,7 @@
 							recency={tokenRecency}
 							onhover={handleTokenHover}
 							onunhover={handleTokenUnhover}
+							onpin={handleTokenPin}
 						/>
 					{:else if viewStore.display === 'graph'}
 						<FullGraph
@@ -536,6 +576,7 @@
 							spans={tokenSpans}
 							onhover={handleTokenHover}
 							onunhover={handleTokenUnhover}
+							onpin={handleTokenPin}
 						/>
 					{/if}
 				</div>
@@ -543,7 +584,16 @@
 		{/if}
 
 		{#if hover}
-			<TokenTooltip x={hover.x} y={hover.y} state={hover.status} graph={hover.graph} />
+			<TokenTooltip
+				x={hover.x}
+				y={hover.y}
+				state={hover.status}
+				graph={hover.graph}
+				{pinned}
+				focusId={hover.tokenId}
+				focusStep={hover.step}
+				onclose={unpin}
+			/>
 		{/if}
 
 		<TimeSlider

@@ -72,6 +72,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -88,6 +89,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -106,6 +108,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -123,6 +126,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -131,38 +135,57 @@ describe('buildNeighborGraph', () => {
 		expect(n0?.anchorStep).toBe(0);
 	});
 
-	it('adds a 1-hop neighborhood for every trajectory node', () => {
+	it('adds a 1-hop neighborhood only for the focused step', () => {
 		const column = new Int32Array([0, 1, 2]);
 		const g = buildNeighborGraph(
 			makeStubStrategy(0.5),
 			makeProvider(),
 			params,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
 		);
 		expect(g.hasNeighborhood).toBe(true);
-		// Each of the 3 trajectory nodes contributes neighbors.
+		// Only the focus at step 2 contributes neighbors.
 		const nbhdEdges = g.edges.filter((e) => !e.trajectory);
-		const anchors = new Set(nbhdEdges.map((e) => e.anchorStep));
-		expect(anchors.has(0)).toBe(true);
-		expect(anchors.has(1)).toBe(true);
-		expect(anchors.has(2)).toBe(true);
-		// Neighborhood edges are anchored at their trajectory node's step.
+		expect(nbhdEdges.length).toBeGreaterThan(0);
 		for (const e of nbhdEdges) {
-			const fromNode = g.nodes.find((n) => n.id === e.from);
-			expect(e.anchorStep).toBe(fromNode?.anchorStep);
+			expect(e.from).toBe(2);
+			expect(e.anchorStep).toBe(2);
 		}
 	});
 
-	it('dedupes neighbors shared between anchors', () => {
+	it('leaves neighbor nodes of earlier steps absent', () => {
+		const column = new Int32Array([0, 1, 2]);
+		const g = buildNeighborGraph(
+			makeStubStrategy(0.5),
+			makeProvider(),
+			params,
+			column,
+			1,
+			new Float32Array(column.length - 1),
+			{ limitMode: 'top-k', k: 5, p: 0.95 },
+			labelOf,
+		);
+		const nbhdEdges = g.edges.filter((e) => !e.trajectory);
+		for (const e of nbhdEdges) {
+			expect(e.from).toBe(1);
+			expect(e.anchorStep).toBe(1);
+		}
+		// The chain still carries all three trajectory nodes.
+		expect(g.nodes.filter((n) => n.role === 'trajectory')).toHaveLength(3);
+	});
+
+	it('dedupes neighbor nodes against the chain', () => {
 		const column = new Int32Array([0, 1]);
 		const g = buildNeighborGraph(
 			makeStubStrategy(0.5),
 			makeProvider(),
 			params,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -177,6 +200,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			new Int32Array([0, 1]),
+			1,
 			new Float32Array(1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -191,6 +215,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			{ ...params, maxDistance: 0 },
 			new Int32Array([0, 1]),
+			1,
 			new Float32Array(1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -207,6 +232,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			params,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95, maxPerAnchor: 2 },
 			labelOf,
@@ -223,6 +249,7 @@ describe('buildNeighborGraph', () => {
 			null,
 			null,
 			column,
+			column.length - 1,
 			new Float32Array(2),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -243,6 +270,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			params,
 			column,
+			column.length - 1,
 			new Float32Array(2),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -261,6 +289,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			params,
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -270,6 +299,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			{ ...params, family: 'gaussian' },
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
@@ -297,6 +327,7 @@ describe('buildNeighborGraph', () => {
 			makeProvider(),
 			{ ...params, family: 'exponential' },
 			column,
+			column.length - 1,
 			new Float32Array(column.length - 1),
 			{ limitMode: 'top-k', k: 5, p: 0.95 },
 			labelOf,
