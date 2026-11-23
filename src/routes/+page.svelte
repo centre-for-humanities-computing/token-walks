@@ -93,6 +93,20 @@
 		].join('|');
 	});
 
+	/** Inputs a pinned inspector reads; a change re-queries without touching rows. */
+	const inspectorKey = $derived.by(() =>
+		[
+			strategyStore.currentId,
+			JSON.stringify(activeStrategyConfig(trajectoryStore.vocabSize)),
+			scheduleStore.currentId,
+			JSON.stringify(scheduleStore.config),
+			scheduleStore.T,
+			inspectionStore.limitMode,
+			inspectionStore.k,
+			inspectionStore.p,
+		].join('|'),
+	);
+
 	// Lazily build the union graph when the graph view is active. The store
 	// call is untracked: its reads of store state must not re-run this effect.
 	$effect(() => {
@@ -347,6 +361,17 @@
 		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
 	}
 
+	/**
+	 * A neighbour pick appends one row from the visible row (discarding any
+	 * future), then re-queries the inspector at the same position and new time.
+	 */
+	function handleNeighborPick(tokenId: number): void {
+		if (!pinned || !hover) return;
+		const index = hover.index;
+		if (!trajectoryStore.jump(index, tokenId)) return;
+		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+	}
+
 	/** Escape or the close button removes the pinned inspector. */
 	function unpin(): void {
 		pinned = false;
@@ -419,9 +444,21 @@
 		if (viewStore.mode !== 'explore') return;
 		const ids = encoded.ids;
 		if (!tokenizerStore.tokenizer || ids.length === 0) return;
-		untrack(() =>
-			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T }),
-		);
+		untrack(() => {
+			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T });
+			if (pinned) unpin();
+		});
+	});
+
+	// A kernel or spread change re-queries a pinned inspector; the built rows
+	// stay untouched (AC8).
+	$effect(() => {
+		if (!inspectorKey) return;
+		untrack(() => {
+			if (pinned && hover) {
+				queryInspector(hover.tokenId, hover.index, hover.x, hover.y, hover.step);
+			}
+		});
 	});
 
 	onMount(() => {
@@ -593,6 +630,7 @@
 				focusId={hover.tokenId}
 				focusStep={hover.step}
 				onclose={unpin}
+				onpick={handleNeighborPick}
 			/>
 		{/if}
 
@@ -609,7 +647,9 @@
 		<button
 			class="undo-btn"
 			disabled={maxStep === 0 || trajectoryStore.t !== maxStep}
-			onclick={() => trajectoryStore.undo()}
+			onclick={() => {
+				if (trajectoryStore.undo()) unpin();
+			}}
 		>
 			Undo
 		</button>

@@ -22,9 +22,11 @@
 		focusStep: number;
 		/** Remove the pinned inspector. */
 		onclose?: () => void;
+		/** Called with a neighbor's token id when it is jumped to. */
+		onpick?: (id: number) => void;
 	}
 
-	let { x, y, state, graph, pinned = false, focusId, focusStep, onclose }: Props = $props();
+	let { x, y, state, graph, pinned = false, focusId, focusStep, onclose, onpick }: Props = $props();
 
 	const OFFSET = 12;
 	/** Tooltip width; position flips to the left when near the right edge. */
@@ -49,7 +51,7 @@
 	{:else if state === 'unavailable'}
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
-		<NeighborGraph {graph} {focusId} {focusStep} />
+		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
 	{/if}
 </div>
 

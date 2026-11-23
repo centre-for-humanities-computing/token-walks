@@ -191,6 +191,11 @@ class TrajectoryStore {
 		return true;
 	}
 
+	/** Number of cached film trajectories; hand-walk rows never enter it. */
+	get cacheSize(): number {
+		return this._cache.size;
+	}
+
 	/** Wrap the trail's built rows in the display `Trajectory` shape. */
 	private _wrapTrail(trail: HandWalk): Trajectory {
 		const rows = trail.rows;

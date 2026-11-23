@@ -8,9 +8,11 @@
 		focusId: number;
 		/** Step the graph is focused on. */
 		focusStep: number;
+		/** Called with a neighbor's token id when it is jumped to. */
+		onpick?: (id: number) => void;
 	}
 
-	let { graph, focusId, focusStep }: Props = $props();
+	let { graph, focusId, focusStep, onpick }: Props = $props();
 
 	const WIDTH = 360;
 	const HEIGHT = 260;
@@ -226,7 +228,18 @@
 	{#each graph.nodes.filter((n) => n.role === 'neighbor') as n (`n${n.id}`)}
 		{@const p = pos.get(`${n.id}`)}
 		{#if p}
-			<g class="node neighbor">
+			<g
+				class="node neighbor pickable"
+				role="button"
+				tabindex={0}
+				aria-label="Jump to token {n.label}"
+				onclick={() => onpick?.(n.id)}
+				onkeydown={(e) => {
+					if (e.key !== 'Enter' && e.key !== ' ') return;
+					e.preventDefault();
+					onpick?.(n.id);
+				}}
+			>
 				<circle cx={p.x} cy={p.y} r={4.5} style="fill: {nodeFill('neighbor', n.anchorStep)}" />
 				<text x={p.x} y={p.y - 8} text-anchor="middle" class="label-nbhd">{short(n.label)}</text>
 			</g>
@@ -270,6 +283,15 @@
 	}
 
 	g.node.current circle {
+		stroke-width: 2.5;
+	}
+
+	g.node.pickable {
+		cursor: pointer;
+	}
+
+	g.node.pickable:focus circle {
+		stroke: #2563eb;
 		stroke-width: 2.5;
 	}
 
