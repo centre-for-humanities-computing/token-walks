@@ -32,7 +32,6 @@
 	import CharOverlapParams from '$lib/components/CharOverlapParams.svelte';
 	import EmbeddingParams from '$lib/components/EmbeddingParams.svelte';
 	import ScheduleParams from '$lib/components/ScheduleParams.svelte';
-	import BetaReadout from '$lib/components/BetaReadout.svelte';
 	import AdvancedPanel from '$lib/components/AdvancedPanel.svelte';
 	import TokenTooltip from '$lib/components/TokenTooltip.svelte';
 	import { inspectionStore } from '$lib/stores/inspection.svelte.js';
@@ -653,8 +652,6 @@
 		>
 			Undo
 		</button>
-
-		<BetaReadout t={trajectoryStore.t} schedule={scheduleStore.instance} />
 
 		<div
 			class="status"
