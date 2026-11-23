@@ -41,13 +41,16 @@
 		</p>
 
 		<p>
-			Scrub the timeline and every token has a small chance of jumping to a neighbour, step by step.
-			The <strong>strategy</strong> picks which network you walk — embedding neighbours, similar
-			spellings, shared letters, WordNet relations — and the <strong>schedule</strong> sets how fast the
-			jumps pile up. Hover over a token to see its immediate neighbourhood, or switch to the graph view
-			to see the whole network at once. Dragging tokens directly and mixing strategies are where this
-			is heading, not what it does yet. The highlights show you which tokens moved most recently. Everything
-			is deterministic: the same seed always produces the same walk.
+			Click a token to pin its inspector, then click a neighbour node to jump: exactly one row is
+			appended, the chosen token replaces that position, and every other token is copied. Scrub the
+			timeline to revisit a row, or undo to pop the last jump. Acting while scrubbed back discards
+			the rows after it. The <strong>strategy</strong> picks which network you walk — embedding
+			neighbours, similar spellings, shared letters, WordNet relations — and the
+			<strong>schedule</strong> sets the weights the inspector reads. Hover over a token to preview its
+			immediate neighbourhood, or switch to the graph view to see the whole network at once. Random flips,
+			the all-neighbours list and mixing strategies are where this is heading, not what it does yet. The
+			highlights show you which tokens moved most recently. Nothing is computed ahead: your clicks decide
+			the walk.
 		</p>
 
 		<h3>What this is (and isn't)</h3>
