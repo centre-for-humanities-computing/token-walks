@@ -475,14 +475,18 @@
 	// With word tokens active there is exactly one valid source (the
 	// vocab-aligned GloVe bundle), so select it before the older
 	// source→tokenizer effect runs; that effect then no-ops because the
-	// selected source already pairs with `words` (no loop).
+	// selected source already pairs with `words` (no loop). The source is
+	// read and written untracked so a user's source click does not re-run
+	// this effect and overwrite that click.
 	$effect(() => {
 		if (strategyStore.currentId !== 'embedding-knn') return;
 		if (tokenizerStore.currentId !== 'words') return;
 		const want = sourceForTokenizer('words');
-		if (want !== null && embeddingStore.sourceId !== want) {
-			embeddingStore.sourceId = want;
-		}
+		untrack(() => {
+			if (want !== null && embeddingStore.sourceId !== want) {
+				embeddingStore.sourceId = want;
+			}
+		});
 	});
 
 	// Keep the tokenizer aligned with the embedding source's vocabulary
