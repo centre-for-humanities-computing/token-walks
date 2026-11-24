@@ -6,7 +6,6 @@
 	import TokenizerPicker from '$lib/components/TokenizerPicker.svelte';
 	import StrategyPicker from '$lib/components/StrategyPicker.svelte';
 	import SchedulePicker from '$lib/components/SchedulePicker.svelte';
-	import SeedControl from '$lib/components/SeedControl.svelte';
 	import TimeSlider from '$lib/components/TimeSlider.svelte';
 	import ViewToggle from '$lib/components/ViewToggle.svelte';
 	import FullGraph from '$lib/components/FullGraph.svelte';
@@ -709,14 +708,6 @@
 
 		{#if viewStore.advancedOpen}
 			<div class="advanced-region">
-				<SeedControl
-					seed={trajectoryStore.seed}
-					disabled={tokenizerStore.status !== 'ready'}
-					onseedchange={(s) => {
-						trajectoryStore.seed = s;
-					}}
-					onreroll={() => trajectoryStore.reroll()}
-				/>
 				<ScheduleParams
 					multiplier={scheduleStore.multiplier}
 					disabled={false}

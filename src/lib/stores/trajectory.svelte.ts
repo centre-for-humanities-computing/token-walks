@@ -1,6 +1,5 @@
 import { browser } from '$app/environment';
 import { HandWalk } from '$lib/engine/hand-walk.js';
-import { randomSeed } from '$lib/engine/rng.js';
 import { TrajectoryCache, hashIds } from '$lib/engine/trajectory-cache.js';
 import type { Trajectory, TrajectorySpec } from '$lib/engine/types.js';
 import type {
@@ -131,14 +130,6 @@ class TrajectoryStore {
 		};
 
 		worker.postMessage(msg);
-	}
-
-	/**
-	 * Force a new random seed and re-compute.
-	 * Caller must re-invoke `request()` after this.
-	 */
-	reroll(): void {
-		this.seed = randomSeed();
 	}
 
 	/**
