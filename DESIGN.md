@@ -102,7 +102,6 @@ First load opens here with one row: the encoded input at $t = 0$ and no future.
 │                                                 │
 ├───────────────────────────────────────────────┤
 │  ◀  ├────────●────────────────┤  ▶  t = 2 / 2 │  ← built-row history
-│  β₂ = 0.004 · ≈ 0.4% eligible (?)               │  ← β readout
 │  120 tokens · 1 changed this step               │  ← quiet status
 ├───────────────────────────────────────────────┤
 │  Tokenizer ▾   Strategy ▾   Schedule ▾   [⚙ Adv] │  ← quiet controls
