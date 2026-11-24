@@ -6,7 +6,6 @@
 	import TokenizerPicker from '$lib/components/TokenizerPicker.svelte';
 	import StrategyPicker from '$lib/components/StrategyPicker.svelte';
 	import SchedulePicker from '$lib/components/SchedulePicker.svelte';
-	import SeedControl from '$lib/components/SeedControl.svelte';
 	import TimeSlider from '$lib/components/TimeSlider.svelte';
 	import ViewToggle from '$lib/components/ViewToggle.svelte';
 	import FullGraph from '$lib/components/FullGraph.svelte';
@@ -32,7 +31,6 @@
 	import CharOverlapParams from '$lib/components/CharOverlapParams.svelte';
 	import EmbeddingParams from '$lib/components/EmbeddingParams.svelte';
 	import ScheduleParams from '$lib/components/ScheduleParams.svelte';
-	import BetaReadout from '$lib/components/BetaReadout.svelte';
 	import AdvancedPanel from '$lib/components/AdvancedPanel.svelte';
 	import TokenTooltip from '$lib/components/TokenTooltip.svelte';
 	import { inspectionStore } from '$lib/stores/inspection.svelte.js';
@@ -93,6 +91,20 @@
 		].join('|');
 	});
 
+	/** Inputs a pinned inspector reads; a change re-queries without touching rows. */
+	const inspectorKey = $derived.by(() =>
+		[
+			strategyStore.currentId,
+			JSON.stringify(activeStrategyConfig(trajectoryStore.vocabSize)),
+			scheduleStore.currentId,
+			JSON.stringify(scheduleStore.config),
+			scheduleStore.T,
+			inspectionStore.limitMode,
+			inspectionStore.k,
+			inspectionStore.p,
+		].join('|'),
+	);
+
 	// Lazily build the union graph when the graph view is active. The store
 	// call is untracked: its reads of store state must not re-run this effect.
 	$effect(() => {
@@ -136,25 +148,27 @@
 		return info ? info.gloss : '';
 	});
 
-	const canStep = $derived(
-		(trajectoryStore.status === 'ready' || trajectoryStore.status === 'computing') &&
-			scheduleStore.T > 0,
-	);
+	const maxStep = $derived(trajectoryStore.trajectory?.T ?? 0);
+	const canStep = $derived(trajectoryStore.status === 'ready' && maxStep > 0);
 
 	function handleKeydown(e: KeyboardEvent) {
 		// Ignore when focus is inside a text input, textarea, or select.
 		const tag = (e.target as HTMLElement).tagName;
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+		if (e.key === 'Escape' && pinned) {
+			unpin();
+			return;
+		}
 		if (!canStep) return;
 
 		if (e.key === 'ArrowLeft') {
 			e.preventDefault();
 			const next = trajectoryStore.t - 1;
-			if (next >= 0) trajectoryStore.t = next;
+			if (next >= 0) setTime(next);
 		} else if (e.key === 'ArrowRight') {
 			e.preventDefault();
 			const next = trajectoryStore.t + 1;
-			if (next <= scheduleStore.T) trajectoryStore.t = next;
+			if (next <= maxStep) setTime(next);
 		}
 	}
 
@@ -252,6 +266,8 @@
 
 	type HoverState = {
 		tokenId: number;
+		index: number;
+		step: number;
 		x: number;
 		y: number;
 		status: 'loading' | 'ready' | 'error' | 'unavailable';
@@ -259,39 +275,37 @@
 	};
 
 	let hover: HoverState | null = $state(null);
+	/** True while a click pinned the inspector at a position and time. */
+	let pinned: boolean = $state(false);
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let hoverQueryId = 0;
 
 	/**
-	 * Handle token hover from either view: record the anchor, then query
-	 * the worker for the inspection graph (trajectory + 1-hop neighborhood).
-	 *
-	 * Works for every strategy: neighborhood strategies (lexical,
-	 * char-overlap) also get the 1-hop neighborhood; others (identity,
-	 * uniform, absorbing) get the trajectory only.
+	 * Query the worker for the inspection graph at one position and step:
+	 * the trajectory chain plus only that step's 1-hop neighborhood.
 	 */
-	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
+	function queryInspector(
+		tokenId: number,
+		index: number,
+		x: number,
+		y: number,
+		step: number,
+	): void {
 		const tok = tokenizerStore.tokenizer;
 		const traj = trajectoryStore.trajectory;
 		if (!tok || !traj) return;
 
-		// Word whitespace is frozen, so its inspector would only repeat the
-		// same token; skip it. Punctuation stays inspectable.
-		const displayed = displayTokens.tokens[index];
-		if (tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n')) return;
+		hover = { tokenId, index, step, x, y, status: 'loading', graph: null };
 
-		hover = { tokenId, x: rect.left, y: rect.top, status: 'loading', graph: null };
-
-		// Trajectory column for this position: $x_0, \ldots, x_t$. The rows
-		// buffer is flat $(T+1) \times L$, so gather position `index` per step.
-		const t = trajectoryStore.t;
+		// Trajectory column for this position: $x_0, \ldots, x_{\text{step}}$.
+		// The rows buffer is flat $(T+1) \times L$, so gather `index` per step.
 		const L = traj.length;
-		const column = new Int32Array(t + 1);
-		for (let s = 0; s <= t; s++) column[s] = traj.rows[s * L + index]!;
+		const column = new Int32Array(step + 1);
+		for (let s = 0; s <= step; s++) column[s] = traj.rows[s * L + index]!;
 		// Schedule $\beta$ values for the steps taken so far.
 		const schedule = scheduleStore.instance;
-		const betas = new Float32Array(t);
-		for (let s = 0; s < t; s++) betas[s] = schedule ? schedule.beta(s) : 0;
+		const betas = new Float32Array(step);
+		for (let s = 0; s < step; s++) betas[s] = schedule ? schedule.beta(s) : 0;
 
 		const queryId = ++hoverQueryId;
 		trajectoryStore
@@ -302,6 +316,7 @@
 				vocabSize: trajectoryStore.vocabSize,
 				oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 				column,
+				focusStep: step,
 				betas,
 				limitMode: inspectionStore.limitMode,
 				k: inspectionStore.k,
@@ -309,16 +324,67 @@
 			})
 			.then((graph) => {
 				// Ignore stale results (mouse moved to another token).
-				if (queryId !== hoverQueryId || !hover || hover.tokenId !== tokenId) return;
-				hover = { tokenId, x: hover.x, y: hover.y, status: 'ready', graph };
+				if (queryId !== hoverQueryId) return;
+				hover = { tokenId, index, step, x, y, status: 'ready', graph };
 			})
 			.catch(() => {
-				if (queryId !== hoverQueryId || !hover || hover.tokenId !== tokenId) return;
-				hover = { tokenId, x: hover.x, y: hover.y, status: 'error', graph: null };
+				if (queryId !== hoverQueryId) return;
+				hover = { tokenId, index, step, x, y, status: 'error', graph: null };
 			});
 	}
 
+	/** White-space is frozen; its inspector would only repeat itself. */
+	function skipInspect(index: number): boolean {
+		const displayed = displayTokens.tokens[index];
+		return tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n');
+	}
+
+	/**
+	 * Hover previews the inspector but never pins. While a token is pinned,
+	 * pointer movement into the tooltip must not close or replace it.
+	 */
+	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
+		const tok = tokenizerStore.tokenizer;
+		const traj = trajectoryStore.trajectory;
+		if (!tok || !traj || pinned || skipInspect(index)) return;
+		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	}
+
+	/** Click/Enter/Space pins the clicked position and time. */
+	function handleTokenPin(tokenId: number, index: number, rect: DOMRect): void {
+		const tok = tokenizerStore.tokenizer;
+		const traj = trajectoryStore.trajectory;
+		if (!tok || !traj || skipInspect(index)) return;
+		pinned = true;
+		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	}
+
+	/**
+	 * A neighbour pick appends one row from the visible row (discarding any
+	 * future), then re-queries the inspector at the same position and new time.
+	 */
+	function handleNeighborPick(tokenId: number): void {
+		if (!pinned || !hover) return;
+		const index = hover.index;
+		if (!trajectoryStore.jump(index, tokenId)) return;
+		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+	}
+
+	/** Escape or the close button removes the pinned inspector. */
+	function unpin(): void {
+		pinned = false;
+		hoverQueryId++;
+		hover = null;
+	}
+
+	/** Move the history scrubber; a pinned inspector belongs to the old row. */
+	function setTime(t: number): void {
+		trajectoryStore.t = t;
+		if (pinned) unpin();
+	}
+
 	function handleTokenUnhover(): void {
+		if (pinned) return;
 		hoverQueryId++;
 		hover = null;
 	}
@@ -333,28 +399,6 @@
 		}
 		return n;
 	});
-
-	// Trajectory computation status suffix for the status line:
-	// phase label + percentage once a phase is known (+ elapsed seconds
-	// after the first second).
-	const trajStatus = $derived.by(() => {
-		if (trajectoryStore.status !== 'computing') return '';
-		const phase = trajectoryStore.phase;
-		const label =
-			phase === 'preparing'
-				? 'Preparing vocabulary'
-				: phase === 'materializing'
-					? 'Preparing vectors'
-					: phase === 'embeddings'
-						? 'Computing embedding neighbours'
-						: 'Computing trajectory';
-		const pctPart = phase !== null ? ` ${Math.round(trajectoryStore.progress * 100)}%` : '';
-		const elapsedPart =
-			trajectoryStore.elapsed >= 1 ? ` (${trajectoryStore.elapsed.toFixed(1)}s)` : '';
-		return ` · ${label}…${pctPart}${elapsedPart}`;
-	});
-
-	const progressPct = $derived(Math.round(trajectoryStore.progress * 100));
 
 	const statusText = $derived.by(() => {
 		const s = tokenizerStore.status;
@@ -376,12 +420,10 @@
 			const changedPart = changedCount !== null ? ` · ${changedCount} changed this step` : '';
 			const oovPart =
 				encoded.vocabSize > t.vocabSize ? ` (+${encoded.vocabSize - t.vocabSize} OOV)` : '';
-			return `${t.info.label} · Vocab: ${formatCount(t.vocabSize)}${oovPart} · Tokens: ${encoded.ids.length}${strategyLabel}${coveragePart}${trajStatus}${changedPart}`;
+			return `${t.info.label} · Vocab: ${formatCount(t.vocabSize)}${oovPart} · Tokens: ${encoded.ids.length}${strategyLabel}${coveragePart}${changedPart}`;
 		}
 		return 'Select a tokenizer';
 	});
-
-	const isComputing = $derived(trajectoryStore.status === 'computing');
 
 	// When the tokenizer becomes ready, instantiate the selected strategy
 	// with the current vocab size. Re-instantiates on tokenizer or strategy change.
@@ -398,30 +440,29 @@
 		scheduleStore.selectSchedule(scheduleStore.currentId);
 	});
 
-	// Request trajectory computation whenever inputs change. The store call is
-	// untracked: a cache hit clamps `t`, and that read must not re-run this
-	// effect on every slider move. Skipped in edit mode: nothing displays a
-	// trajectory there, and selecting embedding-knn would otherwise fetch its
-	// bundle before the visitor presses "Walk it".
+	// Open (or reset) the hand-walk timeline whenever the encoded input
+	// changes. Strategy and schedule changes leave the built rows alone: only
+	// later jumps and inspector reads use the new kernel (AC8). Nothing is
+	// computed or cached on the way in.
 	$effect(() => {
 		if (viewStore.mode !== 'explore') return;
 		const ids = encoded.ids;
-		const tok = tokenizerStore.tokenizer;
-		if (!tok || ids.length === 0) return;
+		if (!tokenizerStore.tokenizer || ids.length === 0) return;
+		untrack(() => {
+			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T });
+			if (pinned) unpin();
+		});
+	});
 
-		const spec = {
-			inputIds: ids,
-			strategyId: strategyStore.currentId,
-			strategyConfig: activeStrategyConfig(encoded.vocabSize),
-			scheduleId: scheduleStore.currentId,
-			scheduleConfig: scheduleStore.config,
-			T: scheduleStore.T,
-			vocabSize: encoded.vocabSize,
-			seed: trajectoryStore.seed,
-			tokenizerId: tokenizerStore.currentId,
-			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
-		};
-		untrack(() => trajectoryStore.request(spec));
+	// A kernel or spread change re-queries a pinned inspector; the built rows
+	// stay untouched (AC8).
+	$effect(() => {
+		if (!inspectorKey) return;
+		untrack(() => {
+			if (pinned && hover) {
+				queryInspector(hover.tokenId, hover.index, hover.x, hover.y, hover.step);
+			}
+		});
 	});
 
 	onMount(() => {
@@ -439,14 +480,18 @@
 	// With word tokens active there is exactly one valid source (the
 	// vocab-aligned GloVe bundle), so select it before the older
 	// source→tokenizer effect runs; that effect then no-ops because the
-	// selected source already pairs with `words` (no loop).
+	// selected source already pairs with `words` (no loop). The source is
+	// read and written untracked so a user's source click does not re-run
+	// this effect and overwrite that click.
 	$effect(() => {
 		if (strategyStore.currentId !== 'embedding-knn') return;
 		if (tokenizerStore.currentId !== 'words') return;
 		const want = sourceForTokenizer('words');
-		if (want !== null && embeddingStore.sourceId !== want) {
-			embeddingStore.sourceId = want;
-		}
+		untrack(() => {
+			if (want !== null && embeddingStore.sourceId !== want) {
+				embeddingStore.sourceId = want;
+			}
+		});
 	});
 
 	// Keep the tokenizer aligned with the embedding source's vocabulary
@@ -549,23 +594,7 @@
 						}}
 					/>
 				</div>
-				{#if isComputing}
-					<div
-						class="traj-progress"
-						role="progressbar"
-						aria-label="Computing trajectory"
-						aria-valuemin="0"
-						aria-valuemax="100"
-						aria-valuenow={trajectoryStore.phase === 'walking' ? progressPct : undefined}
-					>
-						<div
-							class="traj-progress-fill"
-							class:indeterminate={trajectoryStore.phase !== 'walking'}
-							style:transform={`scaleX(${trajectoryStore.progress})`}
-						></div>
-					</div>
-				{/if}
-				<div class="tokens-area" class:computing={isComputing} data-testid="output">
+				<div class="tokens-area" data-testid="output">
 					{#if viewStore.display === 'chips'}
 						<TokenChips
 							tokens={displayTokens.tokens}
@@ -573,6 +602,7 @@
 							recency={tokenRecency}
 							onhover={handleTokenHover}
 							onunhover={handleTokenUnhover}
+							onpin={handleTokenPin}
 						/>
 					{:else if viewStore.display === 'graph'}
 						<FullGraph
@@ -591,6 +621,7 @@
 							spans={tokenSpans}
 							onhover={handleTokenHover}
 							onunhover={handleTokenUnhover}
+							onpin={handleTokenPin}
 						/>
 					{/if}
 				</div>
@@ -598,20 +629,36 @@
 		{/if}
 
 		{#if hover}
-			<TokenTooltip x={hover.x} y={hover.y} state={hover.status} graph={hover.graph} />
+			<TokenTooltip
+				x={hover.x}
+				y={hover.y}
+				state={hover.status}
+				graph={hover.graph}
+				{pinned}
+				focusId={hover.tokenId}
+				focusStep={hover.step}
+				onclose={unpin}
+				onpick={handleNeighborPick}
+			/>
 		{/if}
 
 		<TimeSlider
 			t={trajectoryStore.t}
-			T={scheduleStore.T}
-			disabled={trajectoryStore.status !== 'ready' && trajectoryStore.status !== 'computing'}
-			ontchange={(t) => {
-				trajectoryStore.t = t;
-			}}
-			onTchange={(n) => scheduleStore.setT(n)}
+			T={maxStep}
+			disabled={trajectoryStore.status !== 'ready'}
+			editableT={false}
+			ontchange={(t) => setTime(t)}
 		/>
 
-		<BetaReadout t={trajectoryStore.t} schedule={scheduleStore.instance} />
+		<button
+			class="undo-btn"
+			disabled={maxStep === 0 || trajectoryStore.t !== maxStep}
+			onclick={() => {
+				if (trajectoryStore.undo()) unpin();
+			}}
+		>
+			Undo
+		</button>
 
 		<div
 			class="status"
@@ -619,9 +666,6 @@
 			data-testid="app-status"
 			data-trajectory-status={trajectoryStore.status}
 		>
-			{#if isComputing}
-				<span class="throbber" aria-hidden="true"></span>
-			{/if}
 			{statusText}
 		</div>
 
@@ -664,14 +708,6 @@
 
 		{#if viewStore.advancedOpen}
 			<div class="advanced-region">
-				<SeedControl
-					seed={trajectoryStore.seed}
-					disabled={tokenizerStore.status !== 'ready'}
-					onseedchange={(s) => {
-						trajectoryStore.seed = s;
-					}}
-					onreroll={() => trajectoryStore.reroll()}
-				/>
 				<ScheduleParams
 					multiplier={scheduleStore.multiplier}
 					disabled={false}
@@ -859,21 +895,6 @@
 	.status.error {
 		color: #c00;
 	}
-	.throbber {
-		display: inline-block;
-		width: 12px;
-		height: 12px;
-		border: 2px solid #ccc;
-		border-top-color: #555;
-		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
-		flex-shrink: 0;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 	textarea {
 		width: 100%;
 		box-sizing: border-box;
@@ -895,47 +916,5 @@
 	}
 	.tokens-area {
 		transition: opacity 0.15s;
-	}
-	.tokens-area.computing {
-		opacity: 0.5;
-	}
-	/* Thin bar floating in the gap above the tokens area. Determinate while
-	   walking; a shimmer while preparing (or before the first progress
-	   message). Fades in after 250ms so quick or cached runs never flash it. */
-	.traj-progress {
-		position: absolute;
-		top: -0.75rem;
-		left: 0;
-		right: 0;
-		height: 3px;
-		border-radius: 2px;
-		background: #e5e7eb;
-		overflow: hidden;
-		animation: progress-in 0.2s ease 0.25s backwards;
-	}
-	.traj-progress-fill {
-		height: 100%;
-		background: #2563eb;
-		transform-origin: 0 50%;
-		transition: transform 0.15s linear;
-	}
-	/* Indeterminate phase: the running animation overrides the inline
-	   scaleX transform (animations outrank inline styles in the cascade). */
-	.traj-progress-fill.indeterminate {
-		width: 33%;
-		animation: progress-shimmer 1.2s ease-in-out infinite;
-	}
-	@keyframes progress-in {
-		from {
-			opacity: 0;
-		}
-	}
-	@keyframes progress-shimmer {
-		from {
-			transform: translateX(-100%);
-		}
-		to {
-			transform: translateX(400%);
-		}
 	}
 </style>

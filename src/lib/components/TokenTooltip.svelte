@@ -14,9 +14,19 @@
 		state: 'loading' | 'ready' | 'error' | 'unavailable';
 		/** The graph, when `state === 'ready'`. */
 		graph: NeighborGraphData | null;
+		/** True while a click pinned this inspector. */
+		pinned?: boolean;
+		/** Token id at the focused step; rings and ramps against it. */
+		focusId: number;
+		/** Step the graph was focused on. */
+		focusStep: number;
+		/** Remove the pinned inspector. */
+		onclose?: () => void;
+		/** Called with a neighbor's token id when it is jumped to. */
+		onpick?: (id: number) => void;
 	}
 
-	let { x, y, state, graph }: Props = $props();
+	let { x, y, state, graph, pinned = false, focusId, focusStep, onclose, onpick }: Props = $props();
 
 	const OFFSET = 12;
 	/** Tooltip width; position flips to the left when near the right edge. */
@@ -30,15 +40,18 @@
 	});
 </script>
 
-<div class="token-tooltip" {style} role="tooltip">
+<div class="token-tooltip" class:pinned {style} role="tooltip">
+	{#if pinned}
+		<button class="close-btn" aria-label="Close inspector" onclick={() => onclose?.()}>×</button>
+	{/if}
 	{#if state === 'loading'}
-		<p class="msg">Computing trajectory…</p>
+		<p class="msg">Reading inspector…</p>
 	{:else if state === 'error'}
 		<p class="msg error">Failed to compute the inspection graph.</p>
 	{:else if state === 'unavailable'}
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
-		<NeighborGraph {graph} />
+		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
 	{/if}
 </div>
 
@@ -52,6 +65,29 @@
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 		padding: 8px;
 		pointer-events: none;
+	}
+
+	/* A pinned inspector keeps receiving pointer events so it survives the
+	   pointer leaving the token and entering the tooltip. */
+	.token-tooltip.pinned {
+		pointer-events: auto;
+	}
+
+	.close-btn {
+		position: absolute;
+		top: 2px;
+		right: 4px;
+		border: none;
+		background: transparent;
+		font-size: 1rem;
+		line-height: 1;
+		color: #666;
+		cursor: pointer;
+		padding: 0 2px;
+	}
+
+	.close-btn:hover {
+		color: #222;
 	}
 
 	.msg {

@@ -56,6 +56,15 @@ A line named in an open issue's `**Compost:**` line is scheduled; `/implement` d
 - 2026-11-20 — Rewriting DESIGN §3.2–§7 and §10; the direct-manipulation interactions they describe do not exist yet — 1 — plan 1 on #107
 - 2026-11-20 — The GitHub repository rename; a human settings action whose old URLs redirect — 1 — plan 1 on #107
 - 2026-11-20 — Changing "noise" in the diffusion surfaces themselves; strategy labels, glosses and tooltips keep that vocabulary on purpose — 1 — plan 1 on #107
-- 2026-11-20 — Click-to-flip, neighbour-jump, interleaving and mixed strategies stay unbuilt and get no implementation issues until Direct manipulation is cultivated; the copy must not promise them — 2 — plan 1 on #107 and #108
 - 2026-11-21 — A creative-writing milestone or sentence; it stays an aspiration — 1 — plan 1 on #108
 - 2026-11-21 — Re-labelling or closing the old backlog beyond the #110 move; history stays readable — 1 — plan 1 on #108
+- 2026-11-23 — The all-neighbours scroll list — issue 2; only nodes the graph already draws are clickable — 1 — plan 1 on #113
+- 2026-11-23 — Random flip and one-step diffusion — issue 3; specific jumps draw no RNG — 1 — plan 1 on #113
+- 2026-11-23 — Forced jumps to neighbours outside the active candidate set — with issue 2's list — 1 — plan 1 on #113
+- 2026-11-23 — Redo, branch trees, named branches — a jump from an earlier row discards the future — 1 — plan 1 on #113
+- 2026-11-23 — Per-step strategy/schedule provenance — rows keep no kernel record — 1 — plan 1 on #113
+- 2026-11-23 — Clicking trajectory nodes to scrub — the slider does that — 1 — plan 1 on #113
+- 2026-11-23 — Mixed strategies — #60 — 1 — plan 1 on #113
+- 2026-11-23 — Touch gestures and modifier-key-only actions — click/Enter and visible buttons only — 1 — plan 1 on #113
+- 2026-11-23 — The film / random-process mode and the e2e coverage that goes with it; it returns as a separate mode — 1 — plan 1 on #113
+- Promoted: click/jump half to #113; mixed-strategies half stays for #60.

@@ -53,8 +53,10 @@ _both_ feel invited. That means:
 The app has two top-level modes for the same document. They are not separate
 pages — the transition is an in-place layout change.
 
-### 3.1 Edit mode (entry)
+### 3.1 Edit mode (optional)
 
+- Reached from the **Edit** affordance in Explore; first load opens in Explore
+  on the one-row timeline.
 - A generous, centred text field, preloaded with example text so the app
   "just works" on first load.
 - A short one-line explanation above it: _"Paste some text, then walk its tokens
@@ -67,18 +69,24 @@ pages — the transition is an in-place layout change.
 
 ### 3.2 Explore mode (the core)
 
-Triggered explicitly by the **"Walk it"** button.
+First load opens here with one row: the encoded input at $t = 0$ and no future.
+**"Walk it"** returns here from Edit.
 
 - The input field collapses to a slim, single-line summary bar at the top:
   the first ~60 chars of the source text plus an **"Edit"** affordance that
   returns to Edit mode.
 - The **rendered decaying text takes the centre**, large and readable.
+- **Click a token, then a neighbour node**, to pin the inspector and append one
+  row: the chosen token replaces that position and every other cell is copied.
+  Acting while scrubbed back discards the rows after it and branches from there.
+- **Undo** pops the tail row.
 - The **timeline** sits directly beneath the text (see §5).
 - A compact **status line** (token count, current $t$, changed-this-step
   count) sits near the timeline, de-emphasised.
 - **Tokenizer and Strategy** remain visible in a quiet control strip (see §6).
-- **Schedule** lives in the same quiet strip; **T** is editable next to the
-  timeline readout; **Seed** is tucked into the Advanced panel.
+- **Schedule** lives in the same quiet strip; the jump horizon is the
+  schedule's $T$ and the total is read-only; **Seed** is tucked into the
+  Advanced panel.
 - Technical panels (schedule plot, diagnostics, per-token distribution) are
   **hidden behind an "Advanced" toggle** (see §7).
 
@@ -93,9 +101,8 @@ Triggered explicitly by the **"Walk it"** button.
 │                                                 │
 │                                                 │
 ├───────────────────────────────────────────────┤
-│  ◀  ├────────●────────────────┤  ▶  t = 7/[50] │  ← timeline (T editable)
-│  β₇ = 0.004 · ≈ 0.4% eligible (?)               │  ← β readout
-│  120 tokens · 4 changed this step               │  ← quiet status
+│  ◀  ├────────●────────────────┤  ▶  t = 2 / 2 │  ← built-row history
+│  120 tokens · 1 changed this step               │  ← quiet status
 ├───────────────────────────────────────────────┤
 │  Tokenizer ▾   Strategy ▾   Schedule ▾   [⚙ Adv] │  ← quiet controls
 └───────────────────────────────────────────────┘
@@ -159,12 +166,17 @@ whether you scrub or step.
 
 ## 5. Timeline
 
-The timeline stays a draggable slider (dragging is retained) and gains
-supplementary stepping controls:
+The timeline is a history scrubber over the rows the reader has built; it never
+shows a future that has not been chosen.
 
-- **◀ / ▶ step buttons** flanking the slider (prev/next timestep).
-- **Arrow-key stepping** when the slider is focused (←/→ = ∓1 step).
-- Current position shown as **`t = 7 / 50`**.
+- **◀ / ▶ step buttons** flanking the slider (prev/next built row).
+- **Arrow-key stepping** when the slider is focused (←/→ = ∓1 row).
+- Current position shown as **`t = 2 / 2`**.
+- The slider ranges only over `0..T`; no control moves past either end.
+- **Undo** pops the tail row. It is disabled at `T = 0` and while scrubbed
+  back, rather than yanking $t$ to the tail.
+- The total $T$ is read-only here: it is the schedule's horizon (300 by
+  default), and the row count is the reader's history.
 
 Accessibility: the slider is a native range input or an ARIA slider with proper
 `aria-valuenow/min/max` and keyboard support.
@@ -191,11 +203,10 @@ styled as a subordinate detail.
 ### 6.2 Schedule (quiet, always visible in Explore)
 
 The schedule picker lives in the same strip as Tokenizer/Strategy, visually
-de-emphasised (smaller type, muted colour). The number of timesteps $T$ is
-edited directly inside the timeline readout (`t = x / [T]`), where it
-directly contextualises the scrub position. The seed and its
-"Re-roll" button live in the Advanced panel (§7) — they are reproducibility
-details, not exploration controls.
+de-emphasised (smaller type, muted colour). The number of timesteps $T$ is the
+schedule's horizon; it is shown read-only in the timeline readout and is not
+edited there. The seed and its "Re-roll" button live in the Advanced panel
+(§7) — they are reproducibility details, not exploration controls.
 
 ### 6.3 Display toggle (prose vs. tokens vs. graph)
 

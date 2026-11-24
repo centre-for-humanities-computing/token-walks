@@ -3,18 +3,20 @@
 An in-browser playground for walking tokens through networks of similarity.
 Tokenizers cut text into tokens, and a distance function — language-model
 embeddings, spelling, shared letters, WordNet relations — places each one among
-its neighbours. Scrub the timeline to follow a walk, hover a token to inspect its
-local neighbourhood, or open the full graph to see the whole network at once.
+its neighbours. Click a token, then one of its neighbours, to walk it one step at
+a time; scrub back through the rows you built, hover a token to inspect its local
+neighbourhood, or open the full graph to see the whole network at once.
 Built with SvelteKit and TypeScript, runs entirely in the browser with zero
 server-side compute.
 
 ## How it works
 
-Each step moves a token to a neighbour with probability $\beta_t$, and the
-schedule controls how $\beta_t$ grows over time. The maths follows the D3PM
-framework of Austin et al. (2021): every strategy defines a Markov transition
-matrix $Q_t = (1-\beta_t)I + \beta_t R$, sampled one step at a time from the
-current text.
+Each jump replaces one token with a neighbour you choose, copying every other
+token into the next row; acting from an earlier row discards the rows after it.
+The strategy decides which neighbours exist and the schedule gives the weights
+the inspector reads. The maths follows the D3PM framework of Austin et al.
+(2021): every strategy defines a Markov transition matrix
+$Q_t = (1-\beta_t)I + \beta_t R$. The walk itself draws no random sample yet.
 
 ## Development
 

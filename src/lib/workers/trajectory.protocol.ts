@@ -46,6 +46,8 @@ export interface TrajectoryWorkerNeighborsRequest {
 	oovTokens?: readonly string[];
 	/** The hovered token's trajectory column: $x_0, x_1, \ldots, x_t$. */
 	column: Int32Array;
+	/** Step in `column` to focus: only this node's 1-hop neighbors are drawn. */
+	focusStep: number;
 	/** Schedule $\beta$ values: $\beta_0, \ldots, \beta_{t-1}$ (length = column.length - 1). */
 	betas: Float32Array;
 	/** Spread limit mode for the neighborhood. */

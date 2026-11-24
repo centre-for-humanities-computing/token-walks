@@ -7,9 +7,11 @@
 		onhover?: (tokenId: number, index: number, rect: DOMRect) => void;
 		/** Called when the pointer leaves a chip. */
 		onunhover?: () => void;
+		/** Called on click/Enter/Space to pin the inspector. */
+		onpin?: (tokenId: number, index: number, rect: DOMRect) => void;
 	}
 
-	let { tokens, ids, recency, onhover, onunhover }: Props = $props();
+	let { tokens, ids, recency, onhover, onunhover, onpin }: Props = $props();
 
 	/**
 	 * Make whitespace and control characters visible in chip labels.
@@ -41,6 +43,16 @@
 				if (id !== undefined && onhover) onhover(id, i, e.currentTarget.getBoundingClientRect());
 			}}
 			onblur={() => onunhover?.()}
+			onclick={(e) => {
+				const id = ids[i];
+				if (id !== undefined && onpin) onpin(id, i, e.currentTarget.getBoundingClientRect());
+			}}
+			onkeydown={(e) => {
+				if (e.key !== 'Enter' && e.key !== ' ') return;
+				e.preventDefault();
+				const id = ids[i];
+				if (id !== undefined && onpin) onpin(id, i, e.currentTarget.getBoundingClientRect());
+			}}
 		>
 			<span class="chip-token">{visibleToken(token)}</span>
 			<span class="chip-id">{ids[i] ?? '?'}</span>

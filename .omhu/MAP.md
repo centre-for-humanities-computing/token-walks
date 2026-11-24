@@ -11,15 +11,17 @@ Its test: does the next session — you or an agent — become cheaper?
 - **WordNet loader** (`src/lib/wordnet/loader.ts`): validates the manifest and caches the typed sections, including per-edge synset indices, in IndexedDB.
 - **WordNet table** (`src/lib/wordnet/table.ts`): resolves a token id or word to a row, its outbound edges with their synsets, and coverage.
 - **WordNet strategy** (`src/lib/strategies/wordnet.ts`): walks one relation edge per jump over the decoded table.
+- **Hand-walk trail** (`src/lib/engine/hand-walk.ts`): growable $(T+1) \times L$ rows behind the display; one row in, jumps append, branches truncate, undo pops.
 
 ## Front door
 
 The app name lives in `src/routes/+layout.svelte` (header and `<title>`) and
 `src/routes/+page.svelte` (`<h1>`, intro and button); the opening story lives in
 `src/lib/components/AboutPanel.svelte`, `README.md`, `AGENT_CONTEXT.md` and
-`DESIGN.md` §1/§8. First load opens on the lexical strategy over GPT-2, and
-the trajectory request starts only after "Walk it", so the embedding bundle
-is fetched only when an embedding walk is chosen.
+`DESIGN.md` §1/§8. First load opens on the lexical strategy over GPT-2 with the
+encoded input as one row at $t = 0$; no trajectory is requested. Edit returns
+to the text, and the embedding bundle is fetched only when an embedding walk is
+chosen.
 
 ## WordNet
 

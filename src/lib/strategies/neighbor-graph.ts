@@ -1,7 +1,7 @@
 /**
  * Build the inspection graph for the hover tooltip: the hovered token's
  * trajectory (the distinct tokens it passed through) plus the 1-hop
- * neighborhood of **every** trajectory node.
+ * neighborhood of the **focused** trajectory node only.
  *
  * Pure function over a strategy + optional provider: no worker, no DOM.
  * Designed as a composable accumulator so a future "all trajectories in
@@ -14,12 +14,15 @@
  * - **Stays produce nothing**: consecutive equal tokens add no edge; only
  *   actual changes do. Each change edge records the steps $s$ at which
  *   that transition was taken (a pair can recur).
- * - **Trajectory edges** carry the exact transition probability
- *   $Q_s(x_{s+1} \mid x_s)$ from `strategy.getLocalDistribution` (this
- *   *includes* the ergodicity floor — it is the true probability the
- *   walk used).
+ * - **Trajectory edges** carry the transition probability
+ *   $Q_s(x_{s+1} \mid x_s)$ that the *current* kernel reads for the pair
+ *   (this includes the ergodicity floor). In hand-walk mode the row was
+ *   chosen directly, so the weight is a read, not the probability that
+ *   produced it.
  * - **Neighborhood edges** carry the floor-free softmax weights from
  *   `resolveNeighbors` (the ergodicity floor is excluded).
+ * - Only the focused step's neighbors are drawn, so a neighbor of an
+ *   earlier trajectory node is structurally absent.
  * - The neighborhood is optional (`hasNeighborhood: false` when the
  *   strategy has no provider or no neighbors are in range).
  */
@@ -148,6 +151,7 @@ export class GraphAccumulator {
  *   one (identity, uniform, absorbing).
  * @param params - Read-time filter params; required when `provider` is set.
  * @param column - The hovered token's trajectory column $x_0, \ldots, x_t$.
+ * @param focusStep - Step in `column` whose 1-hop neighbors are drawn.
  * @param betas - Schedule values $\beta_0, \ldots, \beta_{t-1}$.
  * @param limits - Spread limits for the neighborhood.
  * @param labelOf - Maps a token id to its display string.
@@ -157,6 +161,7 @@ export function buildNeighborGraph(
 	provider: NeighborhoodProvider | null,
 	params: NeighborGraphParams | null,
 	column: Int32Array,
+	focusStep: number,
 	betas: Float32Array,
 	limits: NeighborGraphLimits,
 	labelOf: (id: number) => string,
@@ -179,24 +184,22 @@ export function buildNeighborGraph(
 		}
 	}
 
-	// ---- 1-hop neighborhood of every trajectory node ----
+	// ---- 1-hop neighborhood of the focused node only ----
 	let hasNeighborhood = false;
-	if (provider && params) {
+	const focus = column[focusStep];
+	if (provider && params && focus !== undefined) {
 		const { maxDistance, k, tau } = params;
 		const family = getWeightFamily(params.family ?? 'exponential');
 		const maxKeep = limits.maxPerAnchor ?? 8;
-		for (const node of acc.nodes.values()) {
-			if (node.role !== 'trajectory') continue;
-			const resolved = resolveNeighbors(provider.neighborsOf(node.id), maxDistance, k, tau, family);
-			const limited = applyLimit(resolved, limits.limitMode, limits.k, limits.p);
-			if (!limited) continue;
-			const kept = truncateByWeight(limited.entries, limited.weights, maxKeep);
-			if (!kept) continue;
+		const resolved = resolveNeighbors(provider.neighborsOf(focus), maxDistance, k, tau, family);
+		const limited = applyLimit(resolved, limits.limitMode, limits.k, limits.p);
+		const kept = limited ? truncateByWeight(limited.entries, limited.weights, maxKeep) : null;
+		if (kept) {
 			hasNeighborhood = true;
 			for (let i = 0; i < kept.entries.length; i++) {
 				const n = kept.entries[i]!;
-				acc.addNeighborNode(n.id, node.anchorStep, labelOf);
-				acc.addNeighborEdge(node.id, n.id, node.anchorStep, kept.weights[i]!, n.dist);
+				acc.addNeighborNode(n.id, focusStep, labelOf);
+				acc.addNeighborEdge(focus, n.id, focusStep, kept.weights[i]!, n.dist);
 			}
 		}
 	}
