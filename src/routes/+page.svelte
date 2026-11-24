@@ -165,11 +165,11 @@
 		if (e.key === 'ArrowLeft') {
 			e.preventDefault();
 			const next = trajectoryStore.t - 1;
-			if (next >= 0) trajectoryStore.t = next;
+			if (next >= 0) setTime(next);
 		} else if (e.key === 'ArrowRight') {
 			e.preventDefault();
 			const next = trajectoryStore.t + 1;
-			if (next <= maxStep) trajectoryStore.t = next;
+			if (next <= maxStep) setTime(next);
 		}
 	}
 
@@ -376,6 +376,12 @@
 		pinned = false;
 		hoverQueryId++;
 		hover = null;
+	}
+
+	/** Move the history scrubber; a pinned inspector belongs to the old row. */
+	function setTime(t: number): void {
+		trajectoryStore.t = t;
+		if (pinned) unpin();
 	}
 
 	function handleTokenUnhover(): void {
@@ -642,9 +648,7 @@
 			T={maxStep}
 			disabled={trajectoryStore.status !== 'ready'}
 			editableT={false}
-			ontchange={(t) => {
-				trajectoryStore.t = t;
-			}}
+			ontchange={(t) => setTime(t)}
 		/>
 
 		<button

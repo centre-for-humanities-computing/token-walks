@@ -81,9 +81,14 @@ test('hand-walk: start, pin, jump, branch and undo', async ({ page }) => {
 	await expect(page.getByTestId('t-max')).toHaveText('1');
 	expect((await readProse(page))!.text).toBe(row1.text);
 
-	// Branch from row 0: the future is replaced, not appended at 3.
+	// Scrubbing closes the pinned inspector so the branch point and focus
+	// agree; the next pin belongs to the visible row.
+	await pin(page, 1);
 	await page.getByTestId('time-slider').fill('0');
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
 	await expect(page.locator('.readout')).toContainText('t = 0 / 1');
+
+	// Branch from row 0: the future is replaced, not appended at 3.
 	await pin(page, 2);
 	await pick(page);
 	await expect(page.locator('.readout')).toContainText('t = 1 / 1');
