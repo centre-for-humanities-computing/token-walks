@@ -46,6 +46,7 @@ import type {
 	TrajectoryWorkerPhase,
 } from './trajectory.protocol.js';
 import { buildNeighborGraph } from '../strategies/neighbor-graph.js';
+import { buildNeighborListPage } from '../strategies/neighbor-list.js';
 import type { NeighborGraphParams } from '../strategies/neighbor-graph.js';
 import { createWordNetTable } from '../wordnet/table.js';
 import type { WordNetResource, WordNetTable } from '../wordnet/table.js';
@@ -504,6 +505,8 @@ self.onmessage = (event: MessageEvent<TrajectoryWorkerRequest>) => {
 		void handleCompute(msg);
 	} else if (msg.kind === 'neighbors') {
 		void handleNeighbors(msg);
+	} else if (msg.kind === 'neighbors-list') {
+		void handleNeighborsList(msg);
 	} else if (msg.kind === 'union-graph') {
 		void handleUnionGraph(msg);
 	}
@@ -694,6 +697,49 @@ async function handleNeighbors(
 	} catch (e: unknown) {
 		const response: TrajectoryWorkerResponse = {
 			kind: 'neighbors-error',
+			requestId,
+			message: e instanceof Error ? e.message : String(e),
+		};
+		self.postMessage(response);
+	}
+}
+
+/**
+ * Handle a page of the focused token's stored neighbourhood.
+ *
+ * Reads `provider.neighborsOf(tokenId)` directly — the provider's
+ * distance-sorted list, not the graph's top-eight cut — and labels the
+ * window with `tokenLabel`. Without a provider the page reports
+ * `hasNeighborhood: false`.
+ */
+async function handleNeighborsList(
+	msg: Extract<TrajectoryWorkerRequest, { kind: 'neighbors-list' }>,
+): Promise<void> {
+	const { requestId, tokenizerId, strategyId, strategyConfig, vocabSize, tokenId, offset, limit } =
+		msg;
+
+	try {
+		const { provider } = await resolveStrategyResource(
+			strategyId,
+			strategyConfig,
+			tokenizerId,
+			msg.oovTokens,
+			vocabSize,
+		);
+		const tok = await loadTokenizer(tokenizerId);
+		const page = buildNeighborListPage(provider ?? null, tokenId, offset, limit, (id) =>
+			tokenLabel(tok, id, vocabSize, msg.oovTokens),
+		);
+
+		const response: TrajectoryWorkerResponse = {
+			kind: 'neighbors-list',
+			requestId,
+			...page,
+		};
+		self.postMessage(response);
+	} catch (e: unknown) {
+		const response: TrajectoryWorkerResponse = {
+			kind: 'neighbors-list-error',
 			requestId,
 			message: e instanceof Error ? e.message : String(e),
 		};

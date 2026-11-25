@@ -1,6 +1,10 @@
 <script lang="ts">
 	import NeighborGraph from './NeighborGraph.svelte';
-	import type { NeighborGraph as NeighborGraphData } from '$lib/workers/trajectory.protocol.js';
+	import NeighborList from './NeighborList.svelte';
+	import type {
+		NeighborGraph as NeighborGraphData,
+		NeighborListPage,
+	} from '$lib/workers/trajectory.protocol.js';
 
 	interface Props {
 		/** Viewport-space anchor point (top-left of the hovered token). */
@@ -14,6 +18,8 @@
 		state: 'loading' | 'ready' | 'error' | 'unavailable';
 		/** The graph, when `state === 'ready'`. */
 		graph: NeighborGraphData | null;
+		/** The stored-neighbourhood page below the graph, when available. */
+		list?: NeighborListPage | null;
 		/** True while a click pinned this inspector. */
 		pinned?: boolean;
 		/** Token id at the focused step; rings and ramps against it. */
@@ -26,7 +32,18 @@
 		onpick?: (id: number) => void;
 	}
 
-	let { x, y, state, graph, pinned = false, focusId, focusStep, onclose, onpick }: Props = $props();
+	let {
+		x,
+		y,
+		state,
+		graph,
+		pinned = false,
+		focusId,
+		focusStep,
+		onclose,
+		onpick,
+		list = null,
+	}: Props = $props();
 
 	const OFFSET = 12;
 	/** Tooltip width; position flips to the left when near the right edge. */
@@ -52,6 +69,9 @@
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
 		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
+		{#if list?.hasNeighborhood}
+			<NeighborList page={list} {onpick} />
+		{/if}
 	{/if}
 </div>
 
