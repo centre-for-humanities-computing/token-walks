@@ -639,6 +639,15 @@ async function handleCompute(
 	}
 }
 
+/** Bind the token-label formatter the inspector handlers share. */
+function makeLabelOf(
+	tok: Tokenizer,
+	vocabSize: number,
+	oovTokens?: readonly string[],
+): (id: number) => string {
+	return (id) => tokenLabel(tok, id, vocabSize, oovTokens);
+}
+
 /**
  * Handle an inspection-graph query for the hover tooltip.
  *
@@ -685,7 +694,7 @@ async function handleNeighbors(
 			focusStep,
 			betas,
 			{ limitMode, k, p },
-			(id) => tokenLabel(tok, id, vocabSize, msg.oovTokens),
+			makeLabelOf(tok, vocabSize, msg.oovTokens),
 		);
 
 		const response: TrajectoryWorkerResponse = {
@@ -727,8 +736,12 @@ async function handleNeighborsList(
 			vocabSize,
 		);
 		const tok = await loadTokenizer(tokenizerId);
-		const page = buildNeighborListPage(provider ?? null, tokenId, offset, limit, (id) =>
-			tokenLabel(tok, id, vocabSize, msg.oovTokens),
+		const page = buildNeighborListPage(
+			provider ?? null,
+			tokenId,
+			offset,
+			limit,
+			makeLabelOf(tok, vocabSize, msg.oovTokens),
 		);
 
 		const response: TrajectoryWorkerResponse = {
@@ -792,7 +805,7 @@ async function handleUnionGraph(msg: TrajectoryWorkerUnionGraphRequest): Promise
 
 		const tok = await loadTokenizer(tokenizerId);
 		if (isStale()) return;
-		const labelOf = (id: number): string => tokenLabel(tok, id, vocabSize, msg.oovTokens);
+		const labelOf = makeLabelOf(tok, vocabSize, msg.oovTokens);
 
 		postProgress('neighbors', 0, 1);
 		const built = await buildUnionGraph({

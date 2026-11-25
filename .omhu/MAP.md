@@ -12,6 +12,7 @@ Its test: does the next session — you or an agent — become cheaper?
 - **WordNet table** (`src/lib/wordnet/table.ts`): resolves a token id or word to a row, its outbound edges with their synsets, and coverage.
 - **WordNet strategy** (`src/lib/strategies/wordnet.ts`): walks one relation edge per jump over the decoded table.
 - **Hand-walk trail** (`src/lib/engine/hand-walk.ts`): growable $(T+1) \times L$ rows behind the display; one row in, jumps append, branches truncate, undo pops.
+- **Neighbour shelf** (`src/lib/strategies/neighbor-list.ts`, `src/lib/components/NeighborList.svelte`): pages the focused token's stored provider list under the graph; a row can jump outside the graph's top eight.
 
 ## Front door
 
