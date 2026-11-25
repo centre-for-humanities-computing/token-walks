@@ -283,6 +283,20 @@
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let hoverQueryId = 0;
 
+	/** Request one page of a token's stored neighbourhood. */
+	function queryNeighborListPage(tokenId: number, offset: number): Promise<NeighborListPage> {
+		return trajectoryStore.queryNeighborList({
+			tokenizerId: tokenizerStore.currentId,
+			strategyId: strategyStore.currentId,
+			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
+			vocabSize: trajectoryStore.vocabSize,
+			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
+			tokenId,
+			offset,
+			limit: NEIGHBOR_LIST_PAGE_SIZE,
+		});
+	}
+
 	/**
 	 * Query the worker for the inspection graph at one position and step:
 	 * the trajectory chain plus only that step's 1-hop neighborhood.
@@ -328,28 +342,24 @@
 			.then((graph) => {
 				// Ignore stale results (mouse moved to another token).
 				if (queryId !== hoverQueryId || !hover) return;
-				hover = { ...hover, status: 'ready', graph };
+				// A provider-less strategy stays unavailable even when the
+				// trajectory chain itself could be drawn.
+				const status = hover.status === 'unavailable' ? 'unavailable' : 'ready';
+				hover = { ...hover, status, graph };
 			})
 			.catch(() => {
 				if (queryId !== hoverQueryId || !hover) return;
 				hover = { ...hover, status: 'error', graph: null };
 			});
 
-		trajectoryStore
-			.queryNeighborList({
-				tokenizerId: tokenizerStore.currentId,
-				strategyId: strategyStore.currentId,
-				strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
-				vocabSize: trajectoryStore.vocabSize,
-				oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
-				tokenId,
-				offset: 0,
-				limit: NEIGHBOR_LIST_PAGE_SIZE,
-			})
-			.then((list) => {
-				if (queryId !== hoverQueryId || !hover) return;
-				hover = { ...hover, list };
-			});
+		queryNeighborListPage(tokenId, 0).then((list) => {
+			if (queryId !== hoverQueryId || !hover) return;
+			hover = {
+				...hover,
+				list,
+				status: list.hasNeighborhood ? hover.status : 'unavailable',
+			};
+		});
 	}
 
 	/** White-space is frozen; its inspector would only repeat itself. */
@@ -387,6 +397,24 @@
 		const index = hover.index;
 		if (!trajectoryStore.jump(index, tokenId)) return;
 		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+	}
+
+	/**
+	 * Append the next page of the focused token's stored neighbourhood.
+	 * A jump re-queries the inspector, which starts the new token at page 0.
+	 */
+	function loadMoreNeighborList(): void {
+		const list = hover?.list;
+		if (!pinned || !hover || !list || list.entries.length >= list.total) return;
+		const queryId = hoverQueryId;
+		const tokenId = hover.tokenId;
+		queryNeighborListPage(tokenId, list.entries.length).then((page) => {
+			if (queryId !== hoverQueryId || !hover?.list) return;
+			hover = {
+				...hover,
+				list: { ...page, entries: [...hover.list.entries, ...page.entries] },
+			};
+		});
 	}
 
 	/** Escape or the close button removes the pinned inspector. */
@@ -659,6 +687,7 @@
 				focusStep={hover.step}
 				onclose={unpin}
 				onpick={handleNeighborPick}
+				onloadmore={loadMoreNeighborList}
 			/>
 		{/if}
 

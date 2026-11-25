@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildNeighborListPage, NEIGHBOR_LIST_PAGE_SIZE } from './neighbor-list.js';
-import type { NeighborEntry, NeighborhoodProvider } from './neighborhood.js';
+import { EditDistanceModel } from './distance-model.js';
+import { NeighborhoodProvider } from './neighborhood.js';
+import type { NeighborEntry } from './neighborhood.js';
 
 /** Provider stub: a fixed distance-sorted list and a store cap. */
 function fakeProvider(entries: readonly NeighborEntry[], maxStored: number) {
@@ -45,5 +47,33 @@ describe('buildNeighborListPage', () => {
 			entries: [],
 			hasNeighborhood: false,
 		});
+	});
+
+	it('keeps a provider-backed empty list distinct from no provider', () => {
+		const empty = fakeProvider([], 200);
+		expect(buildNeighborListPage(empty, 0, 0, NEIGHBOR_LIST_PAGE_SIZE, labelOf)).toMatchObject({
+			entries: [],
+			total: 0,
+			hasNeighborhood: true,
+		});
+	});
+});
+
+describe('buildNeighborListPage on the lexical provider', () => {
+	const vocab = ['cat', 'cats', 'car', 'cart', 'dog', 'dogs', 'frog', 'log'];
+	const provider = new NeighborhoodProvider(new EditDistanceModel(vocab), 2, { maxStored: 200 });
+	const labelOf = (id: number): string => vocab[id]!;
+
+	it('pages the real provider list with no gaps and resolved labels', () => {
+		const stored = provider.neighborsOf(0);
+		expect(stored.length).toBeGreaterThan(2);
+		const seen: number[] = [];
+		for (let offset = 0; offset < stored.length; offset += 2) {
+			const page = buildNeighborListPage(provider, 0, offset, 2, labelOf);
+			expect(page.total).toBe(stored.length);
+			expect(page.entries.every((e) => e.label.length > 0)).toBe(true);
+			seen.push(...page.entries.map((e) => e.id));
+		}
+		expect(seen).toEqual(stored.map((e) => e.id));
 	});
 });

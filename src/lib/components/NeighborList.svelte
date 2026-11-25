@@ -2,17 +2,22 @@
 	import type { NeighborListPage } from '$lib/workers/trajectory.protocol.js';
 
 	interface Props {
-		/** One page of the focused token's stored neighbourhood. */
+		/** One page (or several appended pages) of the stored neighbourhood. */
 		page: NeighborListPage;
 		/** Called with a row's token id when it is jumped to. */
 		onpick?: (id: number) => void;
+		/** Append the next page. */
+		onloadmore?: () => void;
 	}
 
-	let { page, onpick }: Props = $props();
+	let { page, onpick, onloadmore }: Props = $props();
 </script>
 
 <div class="neighbor-list">
-	<p class="caption">Neighbours ({page.total})</p>
+	<p class="caption">
+		Neighbours ({page.total}){#if page.atCap}
+			— first {page.total} nearest{/if}
+	</p>
 	{#if page.entries.length === 0}
 		<p>No stored neighbours.</p>
 	{:else}
@@ -32,6 +37,9 @@
 				</li>
 			{/each}
 		</ul>
+		{#if page.entries.length < page.total}
+			<button type="button" class="more" onclick={() => onloadmore?.()}>Load more</button>
+		{/if}
 	{/if}
 </div>
 
@@ -80,5 +88,16 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.more {
+		margin-top: 4px;
+		border: 0;
+		background: transparent;
+		padding: 2px 4px;
+		font: inherit;
+		color: #555;
+		cursor: pointer;
+		text-decoration: underline;
 	}
 </style>

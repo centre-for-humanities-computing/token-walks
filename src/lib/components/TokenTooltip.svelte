@@ -30,6 +30,8 @@
 		onclose?: () => void;
 		/** Called with a neighbor's token id when it is jumped to. */
 		onpick?: (id: number) => void;
+		/** Append the next page of the stored neighbourhood. */
+		onloadmore?: () => void;
 	}
 
 	let {
@@ -42,6 +44,7 @@
 		focusStep,
 		onclose,
 		onpick,
+		onloadmore,
 		list = null,
 	}: Props = $props();
 
@@ -51,9 +54,13 @@
 
 	const style = $derived.by(() => {
 		const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+		const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
 		const flip = x + WIDTH + OFFSET > vw;
 		const left = flip ? x - WIDTH - OFFSET : x + OFFSET;
-		return `left: ${left}px; top: ${y + OFFSET}px; width: ${WIDTH}px;`;
+		const top = y + OFFSET;
+		// Keep the pinned inspector inside the viewport; its content scrolls.
+		const maxHeight = Math.max(160, vh - top - 8);
+		return `left: ${left}px; top: ${top}px; width: ${WIDTH}px; max-height: ${maxHeight}px;`;
 	});
 </script>
 
@@ -70,7 +77,7 @@
 	{:else if graph}
 		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
 		{#if list?.hasNeighborhood}
-			<NeighborList page={list} {onpick} />
+			<NeighborList page={list} {onpick} {onloadmore} />
 		{/if}
 	{/if}
 </div>
@@ -85,6 +92,8 @@
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 		padding: 8px;
 		pointer-events: none;
+		/* Long lists scroll inside the clamped tooltip; no motion. */
+		overflow-y: auto;
 	}
 
 	/* A pinned inspector keeps receiving pointer events so it survives the
