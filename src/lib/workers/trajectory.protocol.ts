@@ -59,6 +59,29 @@ export interface TrajectoryWorkerNeighborsRequest {
 }
 
 /**
+ * Page the focused token's complete stored neighbourhood for the pinned
+ * inspector's list. Reads the provider's distance order directly at one
+ * `offset`/`limit` window; the graph keeps its separate top-eight cut.
+ */
+export interface TrajectoryWorkerNeighborsListRequest {
+	kind: 'neighbors-list';
+	/** Monotonic request id (separate counter from compute requests). */
+	requestId: number;
+	tokenizerId: string;
+	strategyId: string;
+	strategyConfig: Record<string, unknown>;
+	vocabSize: number;
+	/** Append-only OOV table: index `i` has id `Tokenizer.vocabSize + i`. */
+	oovTokens?: readonly string[];
+	/** Token id whose stored neighbourhood is paged. */
+	tokenId: number;
+	/** Offset into the distance-sorted stored list. */
+	offset: number;
+	/** Maximum number of rows to return. */
+	limit: number;
+}
+
+/**
  * Build the **union graph** for the full-graph view: one token-space
  * graph merging the trajectories of *all* positions over all steps
  * $0..T$, plus the 1-hop neighborhood of every trajectory node (when
@@ -101,6 +124,7 @@ export interface TrajectoryWorkerUnionGraphRequest {
 export type TrajectoryWorkerRequest =
 	| TrajectoryWorkerComputeRequest
 	| TrajectoryWorkerNeighborsRequest
+	| TrajectoryWorkerNeighborsListRequest
 	| TrajectoryWorkerUnionGraphRequest;
 
 // ---- Responses (worker → main) ----
@@ -202,6 +226,33 @@ export interface TrajectoryWorkerNeighborsResultResponse {
 	graph: NeighborGraph;
 }
 
+/** One row of the stored-neighbourhood list. */
+export interface NeighborListEntry {
+	/** Token id. */
+	id: number;
+	/** Display string for the token, resolved by `tokenLabel`. */
+	label: string;
+	/** Raw provider distance (nearest first). */
+	dist: number;
+}
+
+/** One page of the stored-neighbourhood list. */
+export interface NeighborListPage {
+	/** Rows in this page, distance ascending. */
+	entries: NeighborListEntry[];
+	/** Length of the provider's full stored list for the token. */
+	total: number;
+	/** True when the provider returned exactly its `maxStored` cap. */
+	atCap: boolean;
+	/** Whether the strategy has a neighbourhood provider at all. */
+	hasNeighborhood: boolean;
+}
+
+export interface TrajectoryWorkerNeighborsListResultResponse extends NeighborListPage {
+	kind: 'neighbors-list';
+	requestId: number;
+}
+
 export interface TrajectoryWorkerComputeErrorResponse {
 	kind: 'error';
 	requestId: number;
@@ -210,6 +261,12 @@ export interface TrajectoryWorkerComputeErrorResponse {
 
 export interface TrajectoryWorkerNeighborsErrorResponse {
 	kind: 'neighbors-error';
+	requestId: number;
+	message: string;
+}
+
+export interface TrajectoryWorkerNeighborsListErrorResponse {
+	kind: 'neighbors-list-error';
 	requestId: number;
 	message: string;
 }
@@ -272,11 +329,13 @@ export interface TrajectoryWorkerUnionGraphErrorResponse {
 export type TrajectoryWorkerResultResponse =
 	| TrajectoryWorkerComputeResultResponse
 	| TrajectoryWorkerNeighborsResultResponse
+	| TrajectoryWorkerNeighborsListResultResponse
 	| TrajectoryWorkerUnionGraphResultResponse;
 
 export type TrajectoryWorkerErrorResponse =
 	| TrajectoryWorkerComputeErrorResponse
 	| TrajectoryWorkerNeighborsErrorResponse
+	| TrajectoryWorkerNeighborsListErrorResponse
 	| TrajectoryWorkerUnionGraphErrorResponse;
 
 export type TrajectoryWorkerResponse =

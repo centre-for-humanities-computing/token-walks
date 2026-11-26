@@ -58,13 +58,21 @@ A line named in an open issue's `**Compost:**` line is scheduled; `/implement` d
 - 2026-11-20 — Changing "noise" in the diffusion surfaces themselves; strategy labels, glosses and tooltips keep that vocabulary on purpose — 1 — plan 1 on #107
 - 2026-11-21 — A creative-writing milestone or sentence; it stays an aspiration — 1 — plan 1 on #108
 - 2026-11-21 — Re-labelling or closing the old backlog beyond the #110 move; history stays readable — 1 — plan 1 on #108
-- 2026-11-23 — The all-neighbours scroll list — issue 2; only nodes the graph already draws are clickable — 1 — plan 1 on #113
 - 2026-11-23 — Random flip and one-step diffusion — issue 3; specific jumps draw no RNG — 1 — plan 1 on #113
-- 2026-11-23 — Forced jumps to neighbours outside the active candidate set — with issue 2's list — 1 — plan 1 on #113
 - 2026-11-23 — Redo, branch trees, named branches — a jump from an earlier row discards the future — 1 — plan 1 on #113
 - 2026-11-23 — Per-step strategy/schedule provenance — rows keep no kernel record — 1 — plan 1 on #113
 - 2026-11-23 — Clicking trajectory nodes to scrub — the slider does that — 1 — plan 1 on #113
 - 2026-11-23 — Mixed strategies — #60 — 1 — plan 1 on #113
 - 2026-11-23 — Touch gestures and modifier-key-only actions — click/Enter and visible buttons only — 1 — plan 1 on #113
 - 2026-11-23 — The film / random-process mode and the e2e coverage that goes with it; it returns as a separate mode — 1 — plan 1 on #113
+- 2026-11-25 — Raising or removing the 200-entry store cap; the list labels the cap instead — 1 — plan 1 on #114
+- 2026-11-25 — Free-text token-id entry, search or filter — 1 — plan 1 on #114
+- 2026-11-25 — WordNet outbound-edge browsing (#91's path) — 1 — plan 1 on #114
+- 2026-11-25 — Virtualised list; "Load more" is the whole paging model — 1 — plan 1 on #114
+- 2026-11-25 — Changing the graph's top-eight limit or layout — 1 — plan 1 on #114
+- 2026-11-25 — Showing softmax weights outside the strategy's top-k; rows show distance only — 1 — plan 1 on #114
+- 2026-11-25 — Marking forced jumps on the edge — later, if the eye asks (parked by the walk) — 1 — plan 1 on #114
+- 2026-11-25 — Honouring top-p in the list — later, if a reader asks for "the neighbours that matter" (parked by the walk) — 1 — plan 1 on #114
+- 2026-11-25 — Mobile or touch gestures — 1 — plan 1 on #114
 - Promoted: click/jump half to #113; mixed-strategies half stays for #60.
+- Promoted: all-neighbours list and forced jumps to #114.

@@ -35,7 +35,8 @@
 	import TokenTooltip from '$lib/components/TokenTooltip.svelte';
 	import { inspectionStore } from '$lib/stores/inspection.svelte.js';
 	import { hashIds } from '$lib/engine/trajectory-cache.js';
-	import type { NeighborGraph } from '$lib/workers/trajectory.protocol.js';
+	import { NEIGHBOR_LIST_PAGE_SIZE } from '$lib/strategies/neighbor-list.js';
+	import type { NeighborGraph, NeighborListPage } from '$lib/workers/trajectory.protocol.js';
 
 	let text = $state(
 		'Governments of the Industrial World, you weary giants of flesh and steel, I come from Cyberspace, the new home of Mind. On behalf of the future, I ask you of the past to leave us alone. You are not welcome among us. You have no sovereignty where we gather.\n\nWe have no elected government, nor are we likely to have one, so I address you with no greater authority than that with which liberty itself always speaks. I declare the global social space we are building to be naturally independent of the tyrannies you seek to impose on us. You have no moral right to rule us nor do you possess any methods of enforcement we have true reason to fear.\n\nGovernments derive their just powers from the consent of the governed. You have neither solicited nor received ours. We did not invite you. You do not know us, nor do you know our world. Cyberspace does not lie within your borders. Do not think that you can build it, as though it were a public construction project. You cannot. It is an act of nature and it grows itself through our collective actions.',
@@ -272,6 +273,8 @@
 		y: number;
 		status: 'loading' | 'ready' | 'error' | 'unavailable';
 		graph: NeighborGraph | null;
+		/** The focused token's stored-neighbourhood page (distance order). */
+		list: NeighborListPage | null;
 	};
 
 	let hover: HoverState | null = $state(null);
@@ -279,6 +282,27 @@
 	let pinned: boolean = $state(false);
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let hoverQueryId = 0;
+	/** True while a "Load more" page is in flight; ignores extra clicks. */
+	let listPagePending = false;
+	/** Monotonic id to drop a page that a newer inspector superseded. */
+	let listPageRequest = 0;
+
+	/** Request one page of a token's stored neighbourhood. */
+	function queryNeighborListPage(
+		tokenId: number,
+		offset: number,
+	): Promise<NeighborListPage | null> {
+		return trajectoryStore.queryNeighborList({
+			tokenizerId: tokenizerStore.currentId,
+			strategyId: strategyStore.currentId,
+			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
+			vocabSize: trajectoryStore.vocabSize,
+			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
+			tokenId,
+			offset,
+			limit: NEIGHBOR_LIST_PAGE_SIZE,
+		});
+	}
 
 	/**
 	 * Query the worker for the inspection graph at one position and step:
@@ -295,7 +319,10 @@
 		const traj = trajectoryStore.trajectory;
 		if (!tok || !traj) return;
 
-		hover = { tokenId, index, step, x, y, status: 'loading', graph: null };
+		hover = { tokenId, index, step, x, y, status: 'loading', graph: null, list: null };
+		// A new inspector invalidates any page still in flight.
+		listPageRequest++;
+		listPagePending = false;
 
 		// Trajectory column for this position: $x_0, \ldots, x_{\text{step}}$.
 		// The rows buffer is flat $(T+1) \times L$, so gather `index` per step.
@@ -324,13 +351,28 @@
 			})
 			.then((graph) => {
 				// Ignore stale results (mouse moved to another token).
-				if (queryId !== hoverQueryId) return;
-				hover = { tokenId, index, step, x, y, status: 'ready', graph };
+				if (queryId !== hoverQueryId || !hover) return;
+				// A provider-less strategy stays unavailable even when the
+				// trajectory chain itself could be drawn.
+				const status = hover.status === 'unavailable' ? 'unavailable' : 'ready';
+				hover = { ...hover, status, graph };
 			})
 			.catch(() => {
-				if (queryId !== hoverQueryId) return;
-				hover = { tokenId, index, step, x, y, status: 'error', graph: null };
+				if (queryId !== hoverQueryId || !hover) return;
+				hover = { ...hover, status: 'error', graph: null };
 			});
+
+		// Hover stays graph-only; the shelf belongs to the pinned inspector.
+		if (pinned) {
+			queryNeighborListPage(tokenId, 0).then((list) => {
+				if (queryId !== hoverQueryId || !hover || !list) return;
+				hover = {
+					...hover,
+					list,
+					status: list.hasNeighborhood ? hover.status : 'unavailable',
+				};
+			});
+		}
 	}
 
 	/** White-space is frozen; its inspector would only repeat itself. */
@@ -368,6 +410,29 @@
 		const index = hover.index;
 		if (!trajectoryStore.jump(index, tokenId)) return;
 		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+	}
+
+	/**
+	 * Append the next page of the focused token's stored neighbourhood.
+	 * A jump re-queries the inspector, which starts the new token at page 0.
+	 */
+	function loadMoreNeighborList(): void {
+		const list = hover?.list;
+		if (!pinned || !hover || !list || listPagePending || list.entries.length >= list.total) return;
+		const queryId = hoverQueryId;
+		const tokenId = hover.tokenId;
+		const requestId = ++listPageRequest;
+		listPagePending = true;
+		queryNeighborListPage(tokenId, list.entries.length).then((page) => {
+			// A newer inspector or page superseded this one.
+			if (requestId !== listPageRequest) return;
+			listPagePending = false;
+			if (queryId !== hoverQueryId || !hover?.list || !page) return;
+			hover = {
+				...hover,
+				list: { ...page, entries: [...hover.list.entries, ...page.entries] },
+			};
+		});
 	}
 
 	/** Escape or the close button removes the pinned inspector. */
@@ -634,11 +699,13 @@
 				y={hover.y}
 				state={hover.status}
 				graph={hover.graph}
+				list={hover.list}
 				{pinned}
 				focusId={hover.tokenId}
 				focusStep={hover.step}
 				onclose={unpin}
 				onpick={handleNeighborPick}
+				onloadmore={loadMoreNeighborList}
 			/>
 		{/if}
 

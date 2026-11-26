@@ -6,9 +6,11 @@ import type {
 	TrajectoryWorkerRequest,
 	TrajectoryWorkerResponse,
 	TrajectoryWorkerNeighborsRequest,
+	TrajectoryWorkerNeighborsListRequest,
 	TrajectoryWorkerPhase,
 	TrajectoryWorkerUnionGraphRequest,
 	NeighborGraph,
+	NeighborListPage,
 } from '$lib/workers/trajectory.protocol.js';
 
 export type TrajectoryStatus = 'idle' | 'computing' | 'ready' | 'error';
@@ -57,6 +59,10 @@ class TrajectoryStore {
 	private _neighborRequestId = 0;
 	/** Pending neighbor-query resolvers keyed by request id. */
 	private _pendingNeighborQueries = new Map<number, (graph: NeighborGraph) => void>();
+	/** Monotonic request id for neighbour-list pages (separate counter). */
+	private _neighborListRequestId = 0;
+	/** Pending neighbour-list resolvers keyed by request id. */
+	private _pendingNeighborListQueries = new Map<number, (page: NeighborListPage | null) => void>();
 	/** Listeners for union-graph responses (owned by the graph store). */
 	private _unionListeners = new Set<(msg: TrajectoryWorkerResponse) => void>();
 	/** The worker instance, created lazily. */
@@ -247,6 +253,45 @@ class TrajectoryStore {
 	}
 
 	/**
+	 * Query one page of a token's complete stored neighbourhood (the
+	 * pinned inspector's list), in the provider's distance order.
+	 *
+	 * Resolves `null` when the worker cannot answer (SSR or a list error),
+	 * so an error is not mistaken for a strategy without a provider.
+	 *
+	 * @param opts - Token, page window, and the strategy resource lookup.
+	 */
+	queryNeighborList(opts: {
+		tokenizerId: string;
+		strategyId: string;
+		strategyConfig: Record<string, unknown>;
+		vocabSize: number;
+		/** Append-only OOV table: index `i` has id `Tokenizer.vocabSize + i`. */
+		oovTokens?: readonly string[];
+		/** Token whose stored neighbourhood is paged. */
+		tokenId: number;
+		offset: number;
+		limit: number;
+	}): Promise<NeighborListPage | null> {
+		if (!browser) {
+			return Promise.resolve(null);
+		}
+
+		const worker = this._getWorker();
+		const requestId = ++this._neighborListRequestId;
+
+		return new Promise((resolve) => {
+			this._pendingNeighborListQueries.set(requestId, resolve);
+			const msg: TrajectoryWorkerNeighborsListRequest = {
+				kind: 'neighbors-list',
+				requestId,
+				...opts,
+			};
+			worker.postMessage(msg);
+		});
+	}
+
+	/**
 	 * Post a union-graph build request to the worker (transferring the
 	 * rows buffer). Responses arrive via the union listeners registered
 	 * with `onUnionMessage`.
@@ -294,6 +339,16 @@ class TrajectoryStore {
 				resolve(
 					msg.kind === 'neighbors' ? msg.graph : { nodes: [], edges: [], hasNeighborhood: false },
 				);
+			}
+			return;
+		}
+
+		// Neighbour-list pages use a third id space.
+		if (msg.kind === 'neighbors-list' || msg.kind === 'neighbors-list-error') {
+			const resolve = this._pendingNeighborListQueries.get(msg.requestId);
+			this._pendingNeighborListQueries.delete(msg.requestId);
+			if (resolve) {
+				resolve(msg.kind === 'neighbors-list' ? msg : null);
 			}
 			return;
 		}

@@ -1,6 +1,10 @@
 <script lang="ts">
 	import NeighborGraph from './NeighborGraph.svelte';
-	import type { NeighborGraph as NeighborGraphData } from '$lib/workers/trajectory.protocol.js';
+	import NeighborList from './NeighborList.svelte';
+	import type {
+		NeighborGraph as NeighborGraphData,
+		NeighborListPage,
+	} from '$lib/workers/trajectory.protocol.js';
 
 	interface Props {
 		/** Viewport-space anchor point (top-left of the hovered token). */
@@ -9,11 +13,13 @@
 		/**
 		 * Tooltip state: `loading` while querying, `ready` with a graph,
 		 * `error` when graph construction failed, `unavailable` when the
-		 * strategy has no neighborhood support (trajectory still shown).
+		 * strategy has no neighborhood support.
 		 */
 		state: 'loading' | 'ready' | 'error' | 'unavailable';
 		/** The graph, when `state === 'ready'`. */
 		graph: NeighborGraphData | null;
+		/** The stored-neighbourhood page below the graph, when available. */
+		list?: NeighborListPage | null;
 		/** True while a click pinned this inspector. */
 		pinned?: boolean;
 		/** Token id at the focused step; rings and ramps against it. */
@@ -24,9 +30,23 @@
 		onclose?: () => void;
 		/** Called with a neighbor's token id when it is jumped to. */
 		onpick?: (id: number) => void;
+		/** Append the next page of the stored neighbourhood. */
+		onloadmore?: () => void;
 	}
 
-	let { x, y, state, graph, pinned = false, focusId, focusStep, onclose, onpick }: Props = $props();
+	let {
+		x,
+		y,
+		state,
+		graph,
+		pinned = false,
+		focusId,
+		focusStep,
+		onclose,
+		onpick,
+		onloadmore,
+		list = null,
+	}: Props = $props();
 
 	const OFFSET = 12;
 	/** Tooltip width; position flips to the left when near the right edge. */
@@ -34,9 +54,15 @@
 
 	const style = $derived.by(() => {
 		const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+		const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
 		const flip = x + WIDTH + OFFSET > vw;
 		const left = flip ? x - WIDTH - OFFSET : x + OFFSET;
-		return `left: ${left}px; top: ${y + OFFSET}px; width: ${WIDTH}px;`;
+		// Keep the pinned inspector inside the viewport: clamp its top up when
+		// there is too little room below, then let the content scroll.
+		const MIN_HEIGHT = 160;
+		const top = Math.min(y + OFFSET, Math.max(8, vh - MIN_HEIGHT - 8));
+		const maxHeight = Math.max(0, vh - top - 8);
+		return `left: ${left}px; top: ${top}px; width: ${WIDTH}px; max-height: ${maxHeight}px;`;
 	});
 </script>
 
@@ -52,6 +78,9 @@
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
 		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
+		{#if pinned && list?.hasNeighborhood}
+			<NeighborList page={list} {onpick} {onloadmore} />
+		{/if}
 	{/if}
 </div>
 
@@ -65,6 +94,8 @@
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 		padding: 8px;
 		pointer-events: none;
+		/* Long lists scroll inside the clamped tooltip; no motion. */
+		overflow-y: auto;
 	}
 
 	/* A pinned inspector keeps receiving pointer events so it survives the

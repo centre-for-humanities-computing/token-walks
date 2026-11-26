@@ -282,6 +282,27 @@ describe('buildNeighborGraph', () => {
 		}
 	});
 
+	it('reads weight 0 for a jump the kernel never offered', () => {
+		// $0 \to 3$ is outside `maxDistance: 1`; at $\varepsilon = 0$ the
+		// floor contributes nothing, so the inspector's edge reads exactly 0.
+		const strategy = getStrategy('lexical', { maxDistance: 1, k: 50, epsilon: 0, tau: 1.0 }, 6, {
+			provider: makeProvider(),
+		});
+		const column = new Int32Array([0, 3]);
+		const g = buildNeighborGraph(
+			strategy,
+			makeProvider(),
+			{ ...params, maxDistance: 1 },
+			column,
+			column.length - 1,
+			new Float32Array(1),
+			{ limitMode: 'top-k', k: 5, p: 0.95 },
+			labelOf,
+		);
+		const edge = g.edges.find((e) => e.from === 0 && e.to === 3 && e.trajectory);
+		expect(edge?.weight).toBe(0);
+	});
+
 	it('family changes neighborhood edge weights, not trajectory edges', () => {
 		const column = new Int32Array([0, 1, 2]);
 		const gDefault = buildNeighborGraph(
