@@ -13,7 +13,7 @@
 		/**
 		 * Tooltip state: `loading` while querying, `ready` with a graph,
 		 * `error` when graph construction failed, `unavailable` when the
-		 * strategy has no neighborhood support (trajectory still shown).
+		 * strategy has no neighborhood support.
 		 */
 		state: 'loading' | 'ready' | 'error' | 'unavailable';
 		/** The graph, when `state === 'ready'`. */
@@ -57,9 +57,11 @@
 		const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
 		const flip = x + WIDTH + OFFSET > vw;
 		const left = flip ? x - WIDTH - OFFSET : x + OFFSET;
-		const top = y + OFFSET;
-		// Keep the pinned inspector inside the viewport; its content scrolls.
-		const maxHeight = Math.max(160, vh - top - 8);
+		// Keep the pinned inspector inside the viewport: clamp its top up when
+		// there is too little room below, then let the content scroll.
+		const MIN_HEIGHT = 160;
+		const top = Math.min(y + OFFSET, Math.max(8, vh - MIN_HEIGHT - 8));
+		const maxHeight = Math.max(0, vh - top - 8);
 		return `left: ${left}px; top: ${top}px; width: ${WIDTH}px; max-height: ${maxHeight}px;`;
 	});
 </script>
@@ -76,7 +78,7 @@
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
 		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
-		{#if list?.hasNeighborhood}
+		{#if pinned && list?.hasNeighborhood}
 			<NeighborList page={list} {onpick} {onloadmore} />
 		{/if}
 	{/if}

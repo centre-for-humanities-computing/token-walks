@@ -23,14 +23,15 @@
 	{:else}
 		<ul>
 			{#each page.entries as e (`${e.id}-${e.dist}`)}
+				{@const label = e.label || `#${e.id}`}
 				<li>
 					<button
 						type="button"
 						class="row"
-						aria-label="Jump to token {e.label || `#${e.id}`}, distance {e.dist}"
+						aria-label="Jump to token {label}, distance {e.dist}"
 						onclick={() => onpick?.(e.id)}
 					>
-						<span class="label">{e.label || `#${e.id}`}</span>
+						<span class="label">{label}</span>
 						<span class="id">#{e.id}</span>
 						<span class="dist">{e.dist}</span>
 					</button>

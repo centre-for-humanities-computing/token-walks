@@ -15,14 +15,6 @@ import type {
 
 export type TrajectoryStatus = 'idle' | 'computing' | 'ready' | 'error';
 
-/** Page returned when the worker cannot answer (SSR or a list error). */
-const EMPTY_NEIGHBOR_LIST: NeighborListPage = {
-	entries: [],
-	total: 0,
-	atCap: false,
-	hasNeighborhood: false,
-};
-
 /**
  * Reactive store for trajectory state.
  *
@@ -70,7 +62,7 @@ class TrajectoryStore {
 	/** Monotonic request id for neighbour-list pages (separate counter). */
 	private _neighborListRequestId = 0;
 	/** Pending neighbour-list resolvers keyed by request id. */
-	private _pendingNeighborListQueries = new Map<number, (page: NeighborListPage) => void>();
+	private _pendingNeighborListQueries = new Map<number, (page: NeighborListPage | null) => void>();
 	/** Listeners for union-graph responses (owned by the graph store). */
 	private _unionListeners = new Set<(msg: TrajectoryWorkerResponse) => void>();
 	/** The worker instance, created lazily. */
@@ -264,6 +256,9 @@ class TrajectoryStore {
 	 * Query one page of a token's complete stored neighbourhood (the
 	 * pinned inspector's list), in the provider's distance order.
 	 *
+	 * Resolves `null` when the worker cannot answer (SSR or a list error),
+	 * so an error is not mistaken for a strategy without a provider.
+	 *
 	 * @param opts - Token, page window, and the strategy resource lookup.
 	 */
 	queryNeighborList(opts: {
@@ -277,9 +272,9 @@ class TrajectoryStore {
 		tokenId: number;
 		offset: number;
 		limit: number;
-	}): Promise<NeighborListPage> {
+	}): Promise<NeighborListPage | null> {
 		if (!browser) {
-			return Promise.resolve(EMPTY_NEIGHBOR_LIST);
+			return Promise.resolve(null);
 		}
 
 		const worker = this._getWorker();
@@ -353,7 +348,7 @@ class TrajectoryStore {
 			const resolve = this._pendingNeighborListQueries.get(msg.requestId);
 			this._pendingNeighborListQueries.delete(msg.requestId);
 			if (resolve) {
-				resolve(msg.kind === 'neighbors-list' ? msg : EMPTY_NEIGHBOR_LIST);
+				resolve(msg.kind === 'neighbors-list' ? msg : null);
 			}
 			return;
 		}

@@ -282,9 +282,16 @@
 	let pinned: boolean = $state(false);
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let hoverQueryId = 0;
+	/** True while a "Load more" page is in flight; ignores extra clicks. */
+	let listPagePending = false;
+	/** Monotonic id to drop a page that a newer inspector superseded. */
+	let listPageRequest = 0;
 
 	/** Request one page of a token's stored neighbourhood. */
-	function queryNeighborListPage(tokenId: number, offset: number): Promise<NeighborListPage> {
+	function queryNeighborListPage(
+		tokenId: number,
+		offset: number,
+	): Promise<NeighborListPage | null> {
 		return trajectoryStore.queryNeighborList({
 			tokenizerId: tokenizerStore.currentId,
 			strategyId: strategyStore.currentId,
@@ -313,6 +320,9 @@
 		if (!tok || !traj) return;
 
 		hover = { tokenId, index, step, x, y, status: 'loading', graph: null, list: null };
+		// A new inspector invalidates any page still in flight.
+		listPageRequest++;
+		listPagePending = false;
 
 		// Trajectory column for this position: $x_0, \ldots, x_{\text{step}}$.
 		// The rows buffer is flat $(T+1) \times L$, so gather `index` per step.
@@ -352,14 +362,17 @@
 				hover = { ...hover, status: 'error', graph: null };
 			});
 
-		queryNeighborListPage(tokenId, 0).then((list) => {
-			if (queryId !== hoverQueryId || !hover) return;
-			hover = {
-				...hover,
-				list,
-				status: list.hasNeighborhood ? hover.status : 'unavailable',
-			};
-		});
+		// Hover stays graph-only; the shelf belongs to the pinned inspector.
+		if (pinned) {
+			queryNeighborListPage(tokenId, 0).then((list) => {
+				if (queryId !== hoverQueryId || !hover || !list) return;
+				hover = {
+					...hover,
+					list,
+					status: list.hasNeighborhood ? hover.status : 'unavailable',
+				};
+			});
+		}
 	}
 
 	/** White-space is frozen; its inspector would only repeat itself. */
@@ -405,11 +418,16 @@
 	 */
 	function loadMoreNeighborList(): void {
 		const list = hover?.list;
-		if (!pinned || !hover || !list || list.entries.length >= list.total) return;
+		if (!pinned || !hover || !list || listPagePending || list.entries.length >= list.total) return;
 		const queryId = hoverQueryId;
 		const tokenId = hover.tokenId;
+		const requestId = ++listPageRequest;
+		listPagePending = true;
 		queryNeighborListPage(tokenId, list.entries.length).then((page) => {
-			if (queryId !== hoverQueryId || !hover?.list) return;
+			// A newer inspector or page superseded this one.
+			if (requestId !== listPageRequest) return;
+			listPagePending = false;
+			if (queryId !== hoverQueryId || !hover?.list || !page) return;
 			hover = {
 				...hover,
 				list: { ...page, entries: [...hover.list.entries, ...page.entries] },
