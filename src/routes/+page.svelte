@@ -431,21 +431,18 @@
 	}
 
 	/**
-	 * Flip the pinned position: sample one next token from the active
-	 * kernel at the current $\beta$, append the row, and re-query the
-	 * inspector at the same position and new step.
+	 * Flip the pinned position: force a jump to one next token from the
+	 * active kernel, append the row, and re-query the inspector at the same
+	 * position and new step.
 	 */
 	async function handleFlip(): Promise<void> {
 		if (!pinned || !hover || trajectoryStore.stepPending) return;
 		const index = hover.index;
-		const step = trajectoryStore.t;
-		const beta = scheduleStore.instance ? scheduleStore.instance.beta(step) : 0;
 		const ok = await trajectoryStore.flip(index, {
 			tokenizerId: tokenizerStore.currentId,
 			strategyId: strategyStore.currentId,
 			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
 			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
-			beta,
 		});
 		if (!ok || !pinned || !hover) return;
 		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];

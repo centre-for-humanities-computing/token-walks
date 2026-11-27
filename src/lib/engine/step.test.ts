@@ -30,20 +30,19 @@ function makeFixedStrategy(): {
 }
 
 describe('sampleFlip', () => {
-	it('samples the token at the requested position with the given beta', () => {
+	it('forces the jump by passing beta 1 at the requested position', () => {
 		const { strategy, calls } = makeFixedStrategy();
 		const row = Int32Array.from([4, 5, 6]);
-		const rng = createRng(42);
 
-		expect(sampleFlip(row, 1, strategy, 0.25, rng)).toBe(7);
-		expect(calls).toEqual([{ token: 5, beta: 0.25 }]);
+		expect(sampleFlip(row, 1, strategy, createRng(42))).toBe(7);
+		expect(calls).toEqual([{ token: 5, beta: 1 }]);
 	});
 
 	it('throws for a position outside the row', () => {
 		const { strategy } = makeFixedStrategy();
 		const row = Int32Array.from([1, 2]);
-		expect(() => sampleFlip(row, -1, strategy, 0.1, createRng(1))).toThrow(RangeError);
-		expect(() => sampleFlip(row, 2, strategy, 0.1, createRng(1))).toThrow(RangeError);
+		expect(() => sampleFlip(row, -1, strategy, createRng(1))).toThrow(RangeError);
+		expect(() => sampleFlip(row, 2, strategy, createRng(1))).toThrow(RangeError);
 	});
 
 	it('repeats the same token for the same seed, row and destination step', () => {
@@ -53,8 +52,8 @@ describe('sampleFlip', () => {
 			100,
 		);
 		const row = Int32Array.from([10, 11, 12]);
-		const first = sampleFlip(row, 1, strategy, 0.2, createRng(deriveSeed(42, 3)));
-		const second = sampleFlip(row, 1, strategy, 0.2, createRng(deriveSeed(42, 3)));
+		const first = sampleFlip(row, 1, strategy, createRng(deriveSeed(42, 3)));
+		const second = sampleFlip(row, 1, strategy, createRng(deriveSeed(42, 3)));
 
 		expect(first).toBe(second);
 		expect(first).toBeGreaterThanOrEqual(0);

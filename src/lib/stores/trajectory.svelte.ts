@@ -203,8 +203,12 @@ class TrajectoryStore {
 	 * resource is resolved there; only the visible row crosses the
 	 * boundary. One step may be in flight at a time.
 	 *
+	 * A flip is a forced jump: it asks the worker for the active kernel's
+	 * jump row rather than rolling the $\beta_t$ stay coin, so the pinned
+	 * position always takes a new sample.
+	 *
 	 * @param position - The sequence position to replace.
-	 * @param opts - Tokenizer/strategy lookup and the step's $\beta$.
+	 * @param opts - Tokenizer/strategy lookup.
 	 * @returns True when a row was appended.
 	 */
 	async flip(
@@ -214,10 +218,9 @@ class TrajectoryStore {
 			strategyId: string;
 			strategyConfig: Record<string, unknown>;
 			oovTokens?: readonly string[];
-			beta: number;
 		},
 	): Promise<boolean> {
-		const step = await this._sampleStep('flip', position, opts);
+		const step = await this._sampleStep('flip', position, { ...opts, beta: 1 });
 		const tokenId = step?.result.tokenId;
 		if (tokenId === undefined) return false;
 		return this.jump(position, tokenId);

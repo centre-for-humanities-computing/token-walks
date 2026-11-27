@@ -123,6 +123,8 @@ test('hand-walk: flip repeats by seed and diffuse steps the whole row', async ({
 	const flip1 = (await readProse(page))!;
 	expect(flip1.spans).toHaveLength(4);
 	expect(flip1.spans[1]!.tokenId).toBeTruthy();
+	expect(flip1.spans[1]!.tokenId).not.toBe(row0.spans[1]!.tokenId);
+	expect(flip1.spans[1]!.text).not.toBe(row0.spans[1]!.text);
 
 	// Undo pops the flip and restores row 0, then the same seed/row/step
 	// repeats the token.

@@ -774,7 +774,7 @@ async function handleStep(msg: Extract<TrajectoryWorkerRequest, { kind: 'step' }
 		}
 
 		if (position === undefined) throw new RangeError('A flip needs a position.');
-		const tokenId = sampleFlip(row, position, strategy, beta, rng);
+		const tokenId = sampleFlip(row, position, strategy, rng);
 
 		const response: TrajectoryWorkerResponse = {
 			kind: 'step',

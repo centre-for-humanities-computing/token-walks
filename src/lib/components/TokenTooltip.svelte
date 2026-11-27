@@ -34,7 +34,7 @@
 		flipping?: boolean;
 		/** True at the trail's snapshotted horizon. */
 		atHorizon?: boolean;
-		/** Sample one next token at the focused position. */
+		/** Force a jump to one next token at the focused position. */
 		onflip?: () => void;
 		/** Remove the pinned inspector. */
 		onclose?: () => void;
@@ -103,7 +103,7 @@
 				class="flip-btn"
 				data-testid="flip-button"
 				disabled={frozen || atHorizon || flipping || state === 'loading' || state === 'error'}
-				title="Sample one next token from the active kernel at this position"
+				title="Force a jump to one next token from the active kernel at this position"
 				onclick={() => onflip?.()}
 			>
 				Flip this token
