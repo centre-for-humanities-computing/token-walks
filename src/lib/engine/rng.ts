@@ -19,6 +19,29 @@ export function createRng(seed: number): Rng {
 }
 
 /**
+ * Derive the seed for one destination step of a hand walk.
+ *
+ * A 32-bit avalanche mix of the visible seed and the destination step.
+ * No sequence position is mixed in, so Flip and Diffuse at the same
+ * destination step share one random stream. They need not draw the same
+ * token: Flip forces $\beta = 1$, while Diffuse uses the schedule's
+ * $\beta_t$ and skips frozen positions.
+ *
+ * @param seed - The visible seed.
+ * @param step - The destination step $t+1$.
+ * @returns A 32-bit unsigned integer seed.
+ */
+export function deriveSeed(seed: number, step: number): number {
+	let h = (seed >>> 0) ^ Math.imul((step >>> 0) + 0x9e3779b9, 0x85ebca6b);
+	h ^= h >>> 16;
+	h = Math.imul(h, 0x7feb352d);
+	h ^= h >>> 15;
+	h = Math.imul(h, 0x846ca68b);
+	h ^= h >>> 16;
+	return h >>> 0;
+}
+
+/**
  * Generate a random integer seed for UI-initiated re-rolls.
  *
  * Uses `Math.random()` — allowed by CONVENTIONS for trivial UI use.

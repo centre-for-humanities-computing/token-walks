@@ -26,7 +26,14 @@
  */
 
 import { computeTrajectory } from '../engine/trajectory.js';
-import { createRng } from '../engine/rng.js';
+import { createRng, deriveSeed } from '../engine/rng.js';
+import { sampleDiffuse, sampleFlip } from '../engine/step.js';
+import {
+	frozenMaskFor,
+	isFrozenToken,
+	whitespaceIds,
+	wordnetFrozenMask,
+} from '../engine/freeze.js';
 import { getStrategy, strategyConfigFor } from '../strategies/index.js';
 import { getSchedule } from '../schedules/index.js';
 import { loadTokenizer } from '../tokenizers/index.js';
@@ -323,16 +330,6 @@ async function ensureDistanceSourceProvider(
 	return provider;
 }
 
-/** Ids of `' '` and `'\n'` in the appended OOV table. */
-function whitespaceIds(staticK: number, oovTokens: readonly string[]): Set<number> {
-	const ids = new Set<number>();
-	for (let i = 0; i < oovTokens.length; i++) {
-		const token = oovTokens[i]!;
-		if (token === ' ' || token === '\n') ids.add(staticK + i);
-	}
-	return ids;
-}
-
 /** Worker-side resources a strategy request needs. */
 interface StrategyResource {
 	provider?: NeighborhoodProvider;
@@ -419,32 +416,6 @@ async function resolveStrategyResource(
 }
 
 /**
- * Freeze mask for positions whose initial id is an OOV whitespace token.
- *
- * $K_{\text{eff}} = K + |\text{OOV}|$, so the OOV id of entry $i$ is
- * `vocabSize - oovTokens.length + i`. Returns `undefined` when the text
- * has no whitespace OOV positions.
- */
-function frozenMaskFor(
-	inputIds: Int32Array,
-	vocabSize: number,
-	oovTokens?: readonly string[],
-): Uint8Array | undefined {
-	const oov = oovTokens ?? [];
-	if (oov.length === 0) return undefined;
-	const whitespace = whitespaceIds(vocabSize - oov.length, oov);
-	const mask = new Uint8Array(inputIds.length);
-	let any = false;
-	for (let i = 0; i < inputIds.length; i++) {
-		if (whitespace.has(inputIds[i]!)) {
-			mask[i] = 1;
-			any = true;
-		}
-	}
-	return any ? mask : undefined;
-}
-
-/**
  * Build the K_eff token-id → dense-row index the WordNet kernel, freeze
  * mask and coverage all read.
  *
@@ -470,20 +441,6 @@ function wordnetRows(
 	return rows;
 }
 
-/** Freeze every position whose token has no outbound WordNet target. */
-function wordnetFrozenMask(inputIds: Int32Array, rows: Int32Array): Uint8Array | undefined {
-	const mask = new Uint8Array(inputIds.length);
-	let any = false;
-	for (let i = 0; i < inputIds.length; i++) {
-		const row = rows[inputIds[i]!];
-		if (row === undefined || row < 0) {
-			mask[i] = 1;
-			any = true;
-		}
-	}
-	return any ? mask : undefined;
-}
-
 /** Coverage of letter-bearing input positions by the same row index. */
 function wordnetCoverage(
 	data: WordNetData,
@@ -507,6 +464,8 @@ self.onmessage = (event: MessageEvent<TrajectoryWorkerRequest>) => {
 		void handleNeighbors(msg);
 	} else if (msg.kind === 'neighbors-list') {
 		void handleNeighborsList(msg);
+	} else if (msg.kind === 'step') {
+		void handleStep(msg);
 	} else if (msg.kind === 'union-graph') {
 		void handleUnionGraph(msg);
 	}
@@ -696,6 +655,15 @@ async function handleNeighbors(
 			{ limitMode, k, p },
 			makeLabelOf(tok, vocabSize, msg.oovTokens),
 		);
+		const focusedToken = column[focusStep];
+		graph.frozen =
+			focusedToken === undefined
+				? false
+				: isFrozenToken(focusedToken, {
+						vocabSize,
+						oovTokens: msg.oovTokens,
+						wordnetRows: wordnet?.rows,
+					});
 
 		const response: TrajectoryWorkerResponse = {
 			kind: 'neighbors',
@@ -753,6 +721,70 @@ async function handleNeighborsList(
 	} catch (e: unknown) {
 		const response: TrajectoryWorkerResponse = {
 			kind: 'neighbors-list-error',
+			requestId,
+			message: e instanceof Error ? e.message : String(e),
+		};
+		self.postMessage(response);
+	}
+}
+
+/**
+ * Handle one hand-walk step: sample from the visible row with the
+ * strategy the main thread named. The row and the schedule stay on the
+ * main thread; a Flip returns one token id and a Diffuse returns one row.
+ */
+async function handleStep(msg: Extract<TrajectoryWorkerRequest, { kind: 'step' }>): Promise<void> {
+	const {
+		mode,
+		requestId,
+		tokenizerId,
+		strategyId,
+		strategyConfig,
+		vocabSize,
+		seed,
+		destinationStep,
+		beta,
+		row,
+		position,
+	} = msg;
+
+	try {
+		const { provider, wordnet } = await resolveStrategyResource(
+			strategyId,
+			strategyConfig,
+			tokenizerId,
+			msg.oovTokens,
+			vocabSize,
+		);
+		const strategy = getStrategy(strategyId, strategyConfig, vocabSize, { provider, wordnet });
+		const rng = createRng(deriveSeed(seed, destinationStep));
+
+		if (mode === 'diffuse') {
+			const frozen = wordnet
+				? wordnetFrozenMask(row, wordnet.rows)
+				: frozenMaskFor(row, vocabSize, msg.oovTokens);
+			const nextRow = sampleDiffuse(row, strategy, beta, rng, frozen);
+			const response: TrajectoryWorkerResponse = {
+				kind: 'step',
+				requestId,
+				row: nextRow,
+			};
+			self.postMessage(response, { transfer: [nextRow.buffer] });
+			return;
+		}
+
+		if (position === undefined) throw new RangeError('A flip needs a position.');
+		const tokenId = sampleFlip(row, position, strategy, rng);
+
+		const response: TrajectoryWorkerResponse = {
+			kind: 'step',
+			requestId,
+			tokenId,
+		};
+		self.postMessage(response);
+	} catch (e: unknown) {
+		const response: TrajectoryWorkerResponse = {
+			kind: 'step-error',
 			requestId,
 			message: e instanceof Error ? e.message : String(e),
 		};

@@ -26,6 +26,16 @@
 		focusId: number;
 		/** Step the graph was focused on. */
 		focusStep: number;
+		/** Whether the focused position is frozen for a hand-walk step. */
+		frozen?: boolean;
+		/** Ergodicity floor of the active kernel; shows the caveat above 0. */
+		epsilon?: number;
+		/** True while one step is in flight. */
+		flipping?: boolean;
+		/** True at the trail's snapshotted horizon. */
+		atHorizon?: boolean;
+		/** Force a jump to one next token at the focused position. */
+		onflip?: () => void;
 		/** Remove the pinned inspector. */
 		onclose?: () => void;
 		/** Called with a neighbor's token id when it is jumped to. */
@@ -42,6 +52,11 @@
 		pinned = false,
 		focusId,
 		focusStep,
+		frozen = false,
+		epsilon = 0,
+		flipping = false,
+		atHorizon = false,
+		onflip,
 		onclose,
 		onpick,
 		onloadmore,
@@ -81,6 +96,25 @@
 		{#if pinned && list?.hasNeighborhood}
 			<NeighborList page={list} {onpick} {onloadmore} />
 		{/if}
+	{/if}
+	{#if pinned}
+		<div class="pin-actions">
+			<button
+				class="flip-btn"
+				data-testid="flip-button"
+				disabled={frozen || atHorizon || flipping || state === 'loading' || state === 'error'}
+				title="Force a jump to one next token from the active kernel at this position"
+				onclick={() => onflip?.()}
+			>
+				Flip this token
+			</button>
+			{#if epsilon > 0}
+				<p class="note">The sample may leave the drawn graph because the kernel has an ε floor.</p>
+			{/if}
+			{#if frozen}
+				<p class="note">This position is frozen, so it cannot be flipped.</p>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -130,5 +164,38 @@
 
 	.msg.error {
 		color: #a33;
+	}
+
+	.pin-actions {
+		margin-top: 6px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.flip-btn {
+		align-self: flex-start;
+		padding: 0.3rem 0.7rem;
+		font-size: 0.8rem;
+		border: 1px solid #bbb;
+		border-radius: 4px;
+		background: #f7f7f7;
+		cursor: pointer;
+	}
+
+	.flip-btn:hover:not(:disabled) {
+		background: #eee;
+	}
+
+	.flip-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.note {
+		margin: 0;
+		font-size: 0.7rem;
+		color: #555;
+		font-family: system-ui, sans-serif;
 	}
 </style>

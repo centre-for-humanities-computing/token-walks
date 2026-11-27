@@ -34,6 +34,22 @@ describe('trajectoryStore hand walk', () => {
 		expect(Array.from(trajectoryStore.trajectory!.tokensAt(1))).toEqual([5, 2, 3]);
 	});
 
+	it('appends a full row and follows the new tail', () => {
+		trajectoryStore.begin(Int32Array.from([1, 2, 3]), { vocabSize: 10, maxSteps: 300 });
+		trajectoryStore.jump(1, 9);
+		expect(trajectoryStore.append(Int32Array.from([7, 8, 9]))).toBe(true);
+
+		expect(trajectoryStore.t).toBe(2);
+		expect(trajectoryStore.trajectory?.T).toBe(2);
+		expect(Array.from(trajectoryStore.trajectory!.tokensAt(2))).toEqual([7, 8, 9]);
+
+		trajectoryStore.t = 0;
+		expect(trajectoryStore.append(Int32Array.from([4, 5, 6]))).toBe(true);
+		expect(trajectoryStore.t).toBe(1);
+		expect(trajectoryStore.trajectory?.T).toBe(1);
+		expect(Array.from(trajectoryStore.trajectory!.tokensAt(1))).toEqual([4, 5, 6]);
+	});
+
 	it('undoes the tail, refuses when scrubbed back, and jumps again', () => {
 		trajectoryStore.begin(Int32Array.from([1, 2, 3]), { vocabSize: 10, maxSteps: 300 });
 		trajectoryStore.jump(1, 9);
@@ -64,6 +80,7 @@ describe('trajectoryStore hand walk', () => {
 		trajectoryStore.t = 0;
 		trajectoryStore.jump(0, 5);
 		trajectoryStore.t = 1;
+		trajectoryStore.append(Int32Array.from([9, 9, 9]));
 		trajectoryStore.undo();
 		expect(trajectoryStore.cacheSize).toBe(before);
 	});

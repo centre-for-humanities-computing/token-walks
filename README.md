@@ -13,10 +13,12 @@ server-side compute.
 
 Each jump replaces one token with a neighbour you choose, copying every other
 token into the next row; acting from an earlier row discards the rows after it.
-The strategy decides which neighbours exist and the schedule gives the weights
-the inspector reads. The maths follows the D3PM framework of Austin et al.
-(2021): every strategy defines a Markov transition matrix
-$Q_t = (1-\beta_t)I + \beta_t R$. The walk itself draws no random sample yet.
+A random **Flip this token** forces one position to take the active kernel's
+next-token jump, and **Diffuse one step** samples every unfrozen position in
+order; both append a row. The strategy decides which neighbours exist and the schedule gives the
+weights the inspector reads. The maths follows the D3PM framework of Austin et
+al. (2021): every strategy defines a Markov transition matrix
+$Q_t = (1-\beta_t)I + \beta_t R$.
 
 ## Development
 

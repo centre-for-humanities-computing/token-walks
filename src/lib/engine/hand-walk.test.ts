@@ -33,6 +33,20 @@ describe('HandWalk', () => {
 		expect(walk.tokensAt(2)).toHaveLength(3);
 	});
 
+	it('appends a full row, discards the future, and respects the horizon', () => {
+		const walk = new HandWalk(initial(), 2);
+		walk.jump(0, 1, 9);
+		expect(walk.append(1, Int32Array.from([7, 8, 9]))).toBe(true);
+		expect(walk.T).toBe(2);
+		expect(Array.from(walk.tokensAt(2))).toEqual([7, 8, 9]);
+
+		expect(walk.append(2, Int32Array.from([0, 0, 0]))).toBe(false);
+		expect(walk.append(0, Int32Array.from([4, 5, 6]))).toBe(true);
+		expect(walk.T).toBe(1);
+		expect(Array.from(walk.tokensAt(1))).toEqual([4, 5, 6]);
+		expect(walk.append(1, Int32Array.from([1, 2]))).toBe(false);
+	});
+
 	it('undoes the tail and is a no-op at T = 0', () => {
 		const walk = new HandWalk(initial(), 10);
 		expect(walk.undo()).toBe(false);

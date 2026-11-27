@@ -102,3 +102,55 @@ test('hand-walk: start, pin, jump, branch and undo', async ({ page }) => {
 
 	expect(errors).toEqual([]);
 });
+
+test('hand-walk: flip repeats by seed and diffuse steps the whole row', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', (e) => errors.push(e.message));
+	page.on('console', (m) => {
+		if (m.type() === 'error') errors.push(m.text());
+	});
+
+	await openTrail(page);
+	await pin(page, 1);
+	const row0 = (await readProse(page))!;
+
+	// Keyboard activation: focus Flip and press Enter.
+	const flipButton = page.getByTestId('flip-button');
+	await expect(flipButton).toBeEnabled({ timeout: TIMEOUT });
+	await flipButton.focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByTestId('t-max')).toHaveText('1', { timeout: TIMEOUT });
+	const flip1 = (await readProse(page))!;
+	expect(flip1.spans).toHaveLength(4);
+	expect(flip1.spans[1]!.tokenId).toBeTruthy();
+	expect(flip1.spans[1]!.tokenId).not.toBe(row0.spans[1]!.tokenId);
+	expect(flip1.spans[1]!.text).not.toBe(row0.spans[1]!.text);
+
+	// Undo pops the flip and restores row 0, then the same seed/row/step
+	// repeats the token.
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(page.getByTestId('t-max')).toHaveText('0');
+	expect((await readProse(page))!.text).toBe(row0.text);
+	await pin(page, 1);
+	await page.getByTestId('flip-button').focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByTestId('t-max')).toHaveText('1', { timeout: TIMEOUT });
+	const flip2 = (await readProse(page))!;
+	expect(flip2.text).toBe(flip1.text);
+	expect(flip2.spans[1]!.tokenId).toBe(flip1.spans[1]!.tokenId);
+
+	// Keyboard activation: focus Diffuse and press Space. The whole row is
+	// appended at the next step; low beta may leave every token unchanged.
+	await page.getByTestId('diffuse-button').focus();
+	await page.keyboard.press('Space');
+	await expect(page.getByTestId('t-max')).toHaveText('2', { timeout: TIMEOUT });
+	const diffuse = (await readProse(page))!;
+	expect(diffuse.spans).toHaveLength(4);
+
+	// Undo restores the flipped row.
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(page.getByTestId('t-max')).toHaveText('1');
+	expect((await readProse(page))!.text).toBe(flip2.text);
+
+	expect(errors).toEqual([]);
+});
