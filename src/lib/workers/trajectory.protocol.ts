@@ -82,6 +82,37 @@ export interface TrajectoryWorkerNeighborsListRequest {
 }
 
 /**
+ * Sample one hand-walk step from the supplied visible row.
+ *
+ * The main thread owns the row and the schedule, so the worker only
+ * resolves the strategy resource, draws once from
+ * `createRng(deriveSeed(seed, destinationStep))`, and returns the one
+ * sampled token. No future row and no full trajectory is computed.
+ */
+export interface TrajectoryWorkerStepRequest {
+	kind: 'step';
+	/** Monotonic request id (separate counter from compute requests). */
+	requestId: number;
+	tokenizerId: string;
+	strategyId: string;
+	strategyConfig: Record<string, unknown>;
+	/** Vocabulary size $K$ (needed to instantiate the strategy). */
+	vocabSize: number;
+	/** Append-only OOV table: index `i` has id `Tokenizer.vocabSize + i`. */
+	oovTokens?: readonly string[];
+	/** The visible seed. */
+	seed: number;
+	/** Destination step $t+1$; the stream is derived from this alone. */
+	destinationStep: number;
+	/** The rate $\beta_t$ for the step out of the visible row. */
+	beta: number;
+	/** The visible row $x_t$, length $L$. */
+	row: Int32Array;
+	/** The one position to sample. */
+	position: number;
+}
+
+/**
  * Build the **union graph** for the full-graph view: one token-space
  * graph merging the trajectories of *all* positions over all steps
  * $0..T$, plus the 1-hop neighborhood of every trajectory node (when
@@ -125,6 +156,7 @@ export type TrajectoryWorkerRequest =
 	| TrajectoryWorkerComputeRequest
 	| TrajectoryWorkerNeighborsRequest
 	| TrajectoryWorkerNeighborsListRequest
+	| TrajectoryWorkerStepRequest
 	| TrajectoryWorkerUnionGraphRequest;
 
 // ---- Responses (worker → main) ----
@@ -217,6 +249,11 @@ export interface NeighborGraph {
 	 * — the trajectory is still present either way.
 	 */
 	hasNeighborhood: boolean;
+	/**
+	 * Whether the focused position is frozen in the hand walk. The worker
+	 * reads it with the same visible-row mask rule the step uses.
+	 */
+	frozen?: boolean;
 }
 
 export interface TrajectoryWorkerNeighborsResultResponse {
@@ -224,6 +261,14 @@ export interface TrajectoryWorkerNeighborsResultResponse {
 	requestId: number;
 	/** The built graph (always non-null; check `hasNeighborhood`). */
 	graph: NeighborGraph;
+}
+
+/** One sampled token for a hand-walk Flip. */
+export interface TrajectoryWorkerStepResultResponse {
+	kind: 'step';
+	requestId: number;
+	/** The sampled token id $x_{t+1}$ at the requested position. */
+	tokenId: number;
 }
 
 /** One row of the stored-neighbourhood list. */
@@ -267,6 +312,12 @@ export interface TrajectoryWorkerNeighborsErrorResponse {
 
 export interface TrajectoryWorkerNeighborsListErrorResponse {
 	kind: 'neighbors-list-error';
+	requestId: number;
+	message: string;
+}
+
+export interface TrajectoryWorkerStepErrorResponse {
+	kind: 'step-error';
 	requestId: number;
 	message: string;
 }
@@ -330,12 +381,14 @@ export type TrajectoryWorkerResultResponse =
 	| TrajectoryWorkerComputeResultResponse
 	| TrajectoryWorkerNeighborsResultResponse
 	| TrajectoryWorkerNeighborsListResultResponse
+	| TrajectoryWorkerStepResultResponse
 	| TrajectoryWorkerUnionGraphResultResponse;
 
 export type TrajectoryWorkerErrorResponse =
 	| TrajectoryWorkerComputeErrorResponse
 	| TrajectoryWorkerNeighborsErrorResponse
 	| TrajectoryWorkerNeighborsListErrorResponse
+	| TrajectoryWorkerStepErrorResponse
 	| TrajectoryWorkerUnionGraphErrorResponse;
 
 export type TrajectoryWorkerResponse =

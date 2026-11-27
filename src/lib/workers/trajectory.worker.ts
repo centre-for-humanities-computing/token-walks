@@ -26,7 +26,9 @@
  */
 
 import { computeTrajectory } from '../engine/trajectory.js';
-import { createRng } from '../engine/rng.js';
+import { createRng, deriveSeed } from '../engine/rng.js';
+import { sampleFlip } from '../engine/step.js';
+import { isFrozenToken } from '../engine/freeze.js';
 import { getStrategy, strategyConfigFor } from '../strategies/index.js';
 import { getSchedule } from '../schedules/index.js';
 import { loadTokenizer } from '../tokenizers/index.js';
@@ -507,6 +509,8 @@ self.onmessage = (event: MessageEvent<TrajectoryWorkerRequest>) => {
 		void handleNeighbors(msg);
 	} else if (msg.kind === 'neighbors-list') {
 		void handleNeighborsList(msg);
+	} else if (msg.kind === 'step') {
+		void handleStep(msg);
 	} else if (msg.kind === 'union-graph') {
 		void handleUnionGraph(msg);
 	}
@@ -696,6 +700,15 @@ async function handleNeighbors(
 			{ limitMode, k, p },
 			makeLabelOf(tok, vocabSize, msg.oovTokens),
 		);
+		const focusedToken = column[focusStep];
+		graph.frozen =
+			focusedToken === undefined
+				? false
+				: isFrozenToken(focusedToken, {
+						vocabSize,
+						oovTokens: msg.oovTokens,
+						wordnetRows: wordnet?.rows,
+					});
 
 		const response: TrajectoryWorkerResponse = {
 			kind: 'neighbors',
@@ -753,6 +766,53 @@ async function handleNeighborsList(
 	} catch (e: unknown) {
 		const response: TrajectoryWorkerResponse = {
 			kind: 'neighbors-list-error',
+			requestId,
+			message: e instanceof Error ? e.message : String(e),
+		};
+		self.postMessage(response);
+	}
+}
+
+/**
+ * Handle one hand-walk step: sample the requested token from the visible
+ * row with the strategy the main thread named. The row and the schedule
+ * stay on the main thread; only the one token id crosses back.
+ */
+async function handleStep(msg: Extract<TrajectoryWorkerRequest, { kind: 'step' }>): Promise<void> {
+	const {
+		requestId,
+		tokenizerId,
+		strategyId,
+		strategyConfig,
+		vocabSize,
+		seed,
+		destinationStep,
+		beta,
+		row,
+		position,
+	} = msg;
+
+	try {
+		const { provider, wordnet } = await resolveStrategyResource(
+			strategyId,
+			strategyConfig,
+			tokenizerId,
+			msg.oovTokens,
+			vocabSize,
+		);
+		const strategy = getStrategy(strategyId, strategyConfig, vocabSize, { provider, wordnet });
+		const rng = createRng(deriveSeed(seed, destinationStep));
+		const tokenId = sampleFlip(row, position, strategy, beta, rng);
+
+		const response: TrajectoryWorkerResponse = {
+			kind: 'step',
+			requestId,
+			tokenId,
+		};
+		self.postMessage(response);
+	} catch (e: unknown) {
+		const response: TrajectoryWorkerResponse = {
+			kind: 'step-error',
 			requestId,
 			message: e instanceof Error ? e.message : String(e),
 		};

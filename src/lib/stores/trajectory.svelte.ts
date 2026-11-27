@@ -7,6 +7,7 @@ import type {
 	TrajectoryWorkerResponse,
 	TrajectoryWorkerNeighborsRequest,
 	TrajectoryWorkerNeighborsListRequest,
+	TrajectoryWorkerStepRequest,
 	TrajectoryWorkerPhase,
 	TrajectoryWorkerUnionGraphRequest,
 	NeighborGraph,
@@ -52,6 +53,8 @@ class TrajectoryStore {
 	phase: TrajectoryWorkerPhase | null = $state(null);
 	/** Elapsed seconds of the in-flight computation, ticked while computing. */
 	elapsed: number = $state(0);
+	/** True while one hand-walk step is in flight; a second click is ignored. */
+	stepPending: boolean = $state(false);
 
 	/** Monotonic request id for staleness detection. */
 	private _requestId = 0;
@@ -63,6 +66,10 @@ class TrajectoryStore {
 	private _neighborListRequestId = 0;
 	/** Pending neighbour-list resolvers keyed by request id. */
 	private _pendingNeighborListQueries = new Map<number, (page: NeighborListPage | null) => void>();
+	/** Monotonic request id for hand-walk steps (separate counter). */
+	private _stepRequestId = 0;
+	/** Pending hand-walk step resolvers keyed by request id. */
+	private _pendingStepQueries = new Map<number, (tokenId: number | null) => void>();
 	/** Listeners for union-graph responses (owned by the graph store). */
 	private _unionListeners = new Set<(msg: TrajectoryWorkerResponse) => void>();
 	/** The worker instance, created lazily. */
@@ -177,6 +184,66 @@ class TrajectoryStore {
 		this.trajectory = this._wrapTrail(trail);
 		this.t = trail.T;
 		return true;
+	}
+
+	/** The trail's snapshotted jump horizon; 0 without a trail. */
+	get maxSteps(): number {
+		return this._trail?.maxSteps ?? 0;
+	}
+
+	/**
+	 * Sample one token at `position` in the visible row and append it
+	 * through the jump branch semantics: later rows are discarded, $T$
+	 * grows by one, and $t$ follows the new tail.
+	 *
+	 * The worker owns the draw so the active kernel's provider or WordNet
+	 * resource is resolved there; only the visible row crosses the
+	 * boundary. One step may be in flight at a time.
+	 *
+	 * @param position - The sequence position to replace.
+	 * @param opts - Tokenizer/strategy lookup and the step's $\beta$.
+	 * @returns True when a row was appended.
+	 */
+	async flip(
+		position: number,
+		opts: {
+			tokenizerId: string;
+			strategyId: string;
+			strategyConfig: Record<string, unknown>;
+			oovTokens?: readonly string[];
+			beta: number;
+		},
+	): Promise<boolean> {
+		if (!browser || this.stepPending || !this._trail) return false;
+		const trail = this._trail;
+		const from = this.t;
+		if (from >= trail.maxSteps || position < 0 || position >= trail.length) return false;
+
+		const requestId = ++this._stepRequestId;
+		this.stepPending = true;
+		const tokenId = await new Promise<number | null>((resolve) => {
+			this._pendingStepQueries.set(requestId, resolve);
+			const msg: TrajectoryWorkerStepRequest = {
+				kind: 'step',
+				requestId,
+				tokenizerId: opts.tokenizerId,
+				strategyId: opts.strategyId,
+				strategyConfig: opts.strategyConfig,
+				vocabSize: this.vocabSize,
+				oovTokens: opts.oovTokens,
+				seed: this.seed,
+				destinationStep: from + 1,
+				beta: opts.beta,
+				row: trail.tokensAt(from).slice(),
+				position,
+			};
+			this._getWorker().postMessage(msg);
+		});
+		if (tokenId === null) return false;
+		// The visible row moved while the draw was in flight; discard it
+		// rather than append to a row the reader did not act from.
+		if (this._trail !== trail || this.t !== from) return false;
+		return this.jump(position, tokenId);
 	}
 
 	/** Pop the tail row and follow it. A no-op at $T = 0$ or when scrubbed back. */
@@ -350,6 +417,15 @@ class TrajectoryStore {
 			if (resolve) {
 				resolve(msg.kind === 'neighbors-list' ? msg : null);
 			}
+			return;
+		}
+
+		// Hand-walk step responses use their own id space.
+		if (msg.kind === 'step' || msg.kind === 'step-error') {
+			const resolve = this._pendingStepQueries.get(msg.requestId);
+			this._pendingStepQueries.delete(msg.requestId);
+			this.stepPending = false;
+			if (resolve) resolve(msg.kind === 'step' ? msg.tokenId : null);
 			return;
 		}
 

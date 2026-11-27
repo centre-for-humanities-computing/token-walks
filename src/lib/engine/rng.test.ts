@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRng, randomSeed } from './rng.js';
+import { createRng, deriveSeed, randomSeed } from './rng.js';
 
 describe('createRng', () => {
 	it('returns a function', () => {
@@ -33,6 +33,26 @@ describe('createRng', () => {
 		}
 		// With 100 draws, probability of all matching is ~0.
 		expect(same).toBeLessThan(100);
+	});
+});
+
+describe('deriveSeed', () => {
+	it('is deterministic and returns a 32-bit unsigned integer', () => {
+		for (let step = 0; step < 50; step++) {
+			const a = deriveSeed(42, step);
+			expect(a).toBe(deriveSeed(42, step));
+			expect(Number.isInteger(a)).toBe(true);
+			expect(a).toBeGreaterThanOrEqual(0);
+			expect(a).toBeLessThanOrEqual(0xffffffff);
+		}
+	});
+
+	it('mixes the destination step into the stream', () => {
+		const seeds = new Set<number>();
+		for (let step = 0; step < 50; step++) seeds.add(deriveSeed(42, step));
+		expect(seeds.size).toBeGreaterThan(1);
+		expect(deriveSeed(42, 1)).not.toBe(deriveSeed(42, 2));
+		expect(deriveSeed(42, 1)).not.toBe(deriveSeed(43, 1));
 	});
 });
 

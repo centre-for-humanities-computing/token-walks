@@ -106,6 +106,12 @@
 		].join('|'),
 	);
 
+	/** Ergodicity floor of the active kernel; 0 for strategies without one. */
+	const activeEpsilon = $derived.by(() => {
+		const config = activeStrategyConfig(trajectoryStore.vocabSize) as { epsilon?: number };
+		return config.epsilon ?? 0;
+	});
+
 	// Lazily build the union graph when the graph view is active. The store
 	// call is untracked: its reads of store state must not re-run this effect.
 	$effect(() => {
@@ -275,6 +281,8 @@
 		graph: NeighborGraph | null;
 		/** The focused token's stored-neighbourhood page (distance order). */
 		list: NeighborListPage | null;
+		/** Whether the focused position is frozen for a hand-walk step. */
+		frozen: boolean;
 	};
 
 	let hover: HoverState | null = $state(null);
@@ -319,7 +327,17 @@
 		const traj = trajectoryStore.trajectory;
 		if (!tok || !traj) return;
 
-		hover = { tokenId, index, step, x, y, status: 'loading', graph: null, list: null };
+		hover = {
+			tokenId,
+			index,
+			step,
+			x,
+			y,
+			status: 'loading',
+			graph: null,
+			list: null,
+			frozen: false,
+		};
 		// A new inspector invalidates any page still in flight.
 		listPageRequest++;
 		listPagePending = false;
@@ -355,7 +373,7 @@
 				// A provider-less strategy stays unavailable even when the
 				// trajectory chain itself could be drawn.
 				const status = hover.status === 'unavailable' ? 'unavailable' : 'ready';
-				hover = { ...hover, status, graph };
+				hover = { ...hover, status, graph, frozen: graph.frozen ?? false };
 			})
 			.catch(() => {
 				if (queryId !== hoverQueryId || !hover) return;
@@ -409,6 +427,29 @@
 		if (!pinned || !hover) return;
 		const index = hover.index;
 		if (!trajectoryStore.jump(index, tokenId)) return;
+		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+	}
+
+	/**
+	 * Flip the pinned position: sample one next token from the active
+	 * kernel at the current $\beta$, append the row, and re-query the
+	 * inspector at the same position and new step.
+	 */
+	async function handleFlip(): Promise<void> {
+		if (!pinned || !hover || trajectoryStore.stepPending) return;
+		const index = hover.index;
+		const step = trajectoryStore.t;
+		const beta = scheduleStore.instance ? scheduleStore.instance.beta(step) : 0;
+		const ok = await trajectoryStore.flip(index, {
+			tokenizerId: tokenizerStore.currentId,
+			strategyId: strategyStore.currentId,
+			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
+			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
+			beta,
+		});
+		if (!ok || !pinned || !hover) return;
+		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
+		if (tokenId === undefined) return;
 		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
 	}
 
@@ -703,6 +744,11 @@
 				{pinned}
 				focusId={hover.tokenId}
 				focusStep={hover.step}
+				frozen={hover.frozen}
+				epsilon={activeEpsilon}
+				flipping={trajectoryStore.stepPending}
+				atHorizon={trajectoryStore.t >= trajectoryStore.maxSteps}
+				onflip={handleFlip}
 				onclose={unpin}
 				onpick={handleNeighborPick}
 				onloadmore={loadMoreNeighborList}
