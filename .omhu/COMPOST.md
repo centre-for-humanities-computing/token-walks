@@ -58,7 +58,6 @@ A line named in an open issue's `**Compost:**` line is scheduled; `/implement` d
 - 2026-11-20 — Changing "noise" in the diffusion surfaces themselves; strategy labels, glosses and tooltips keep that vocabulary on purpose — 1 — plan 1 on #107
 - 2026-11-21 — A creative-writing milestone or sentence; it stays an aspiration — 1 — plan 1 on #108
 - 2026-11-21 — Re-labelling or closing the old backlog beyond the #110 move; history stays readable — 1 — plan 1 on #108
-- 2026-11-23 — Random flip and one-step diffusion — issue 3; specific jumps draw no RNG — 1 — plan 1 on #113
 - 2026-11-23 — Redo, branch trees, named branches — a jump from an earlier row discards the future — 1 — plan 1 on #113
 - 2026-11-23 — Per-step strategy/schedule provenance — rows keep no kernel record — 1 — plan 1 on #113
 - 2026-11-23 — Clicking trajectory nodes to scrub — the slider does that — 1 — plan 1 on #113
@@ -74,5 +73,14 @@ A line named in an open issue's `**Compost:**` line is scheduled; `/implement` d
 - 2026-11-25 — Marking forced jumps on the edge — later, if the eye asks (parked by the walk) — 1 — plan 1 on #114
 - 2026-11-25 — Honouring top-p in the list — later, if a reader asks for "the neighbours that matter" (parked by the walk) — 1 — plan 1 on #114
 - 2026-11-25 — Mobile or touch gestures — 1 — plan 1 on #114
+- 2026-11-27 — Auto-run or a play button — one action, one step — 1 — plan 1 on #115
+- 2026-11-27 — Flip applying to every position; that is Diffuse one step — 1 — plan 1 on #115
+- 2026-11-27 — Per-position beta (#50); one $\beta_t$ per row — 1 — plan 1 on #115
+- 2026-11-27 — Re-rolling without appending; every random action is a row — 1 — plan 1 on #115
+- 2026-11-27 — WordNet relation-aware flips (#91); Flip samples a token, no edge label — 1 — plan 1 on #115
+- 2026-11-27 — Precomputing a future row; only the pinned candidate list is eager — 1 — plan 1 on #115
+- 2026-11-27 — A frozen/unfrozen overlay; the inspector note stands in for now — 1 — plan 1 on #115
+- 2026-11-27 — Separating the Flip and Diffuse streams; they share a destination-step stream by decision — 1 — plan 1 on #115
 - Promoted: click/jump half to #113; mixed-strategies half stays for #60.
 - Promoted: all-neighbours list and forced jumps to #114.
+- Promoted: random flip and one-step diffusion to #115.

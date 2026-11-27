@@ -53,3 +53,7 @@ Noticed: the plan guessed ~6 MB for the bundle and the export landed at 4.05 MB 
 ## 2026-11-21 — implement — the walk's answers overruled its own bullets
 
 Noticed: the walk's "Decided" bullets kept M2–M6 as five slots with click inside M2, but its later "Still open" answers gave click its own milestone and dropped the numbers; the later answers won. AC5's "only through `milestone edit --description`" was narrower than that answer — the renames needed `--title` and the new milestone needed `create` — so the table names every title change.
+
+## 2026-11-27 — implement — the target and the gate pull in opposite directions
+
+Noticed: slice 1 first measured 505 changed lines, over the 500 gate, and was trimmed to 492 by shortening docs; slice 2 then landed at 417, over the 400 target but under the gate, mostly from moving the freeze helpers and growing the seeded differential.

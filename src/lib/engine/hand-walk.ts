@@ -1,11 +1,13 @@
 /**
- * Growable hand-walk trail: row $0$ is the encoded input and every later
- * row copies one visible row and replaces exactly one position.
+ * Growable hand-walk trail: row $0$ is the encoded input. A jump copies one
+ * visible row and replaces exactly one position; `append` copies a full row
+ * already sampled by the worker.
  *
- * No RNG and no future: the reader's jumps decide the next row. The buffer
- * is preallocated at `(maxSteps + 1) * L` cells and rows beyond the built
- * tail are overwritten, so branching from an earlier row truncates the
- * future instead of growing a tree.
+ * The trail draws no RNG and holds no future: the reader's jump or random
+ * step decides the next row. The buffer is preallocated at
+ * `(maxSteps + 1) * L` cells and rows beyond the built tail are overwritten,
+ * so branching from an earlier row truncates the future instead of growing a
+ * tree.
  */
 export class HandWalk {
 	/** Sequence length $L$. */
