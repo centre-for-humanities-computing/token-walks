@@ -85,12 +85,15 @@ export interface TrajectoryWorkerNeighborsListRequest {
  * Sample one hand-walk step from the supplied visible row.
  *
  * The main thread owns the row and the schedule, so the worker only
- * resolves the strategy resource, draws once from
- * `createRng(deriveSeed(seed, destinationStep))`, and returns the one
- * sampled token. No future row and no full trajectory is computed.
+ * resolves the strategy resource, draws from
+ * `createRng(deriveSeed(seed, destinationStep))`, and returns the result.
+ * A `flip` returns one token; a `diffuse` returns one full row. No
+ * future row and no full trajectory is computed.
  */
 export interface TrajectoryWorkerStepRequest {
 	kind: 'step';
+	/** Which kind of step to take. */
+	mode: 'flip' | 'diffuse';
 	/** Monotonic request id (separate counter from compute requests). */
 	requestId: number;
 	tokenizerId: string;
@@ -108,8 +111,8 @@ export interface TrajectoryWorkerStepRequest {
 	beta: number;
 	/** The visible row $x_t$, length $L$. */
 	row: Int32Array;
-	/** The one position to sample. */
-	position: number;
+	/** The one position to sample for a `flip`; ignored by `diffuse`. */
+	position?: number;
 }
 
 /**
@@ -263,12 +266,14 @@ export interface TrajectoryWorkerNeighborsResultResponse {
 	graph: NeighborGraph;
 }
 
-/** One sampled token for a hand-walk Flip. */
+/** One sampled hand-walk result: a Flip token or a Diffuse row. */
 export interface TrajectoryWorkerStepResultResponse {
 	kind: 'step';
 	requestId: number;
-	/** The sampled token id $x_{t+1}$ at the requested position. */
-	tokenId: number;
+	/** The sampled token id $x_{t+1}$ at the requested position (Flip). */
+	tokenId?: number;
+	/** The sampled next row $x_{t+1}$, length $L$ (Diffuse). */
+	row?: Int32Array;
 }
 
 /** One row of the stored-neighbourhood list. */

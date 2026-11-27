@@ -69,7 +69,10 @@ class TrajectoryStore {
 	/** Monotonic request id for hand-walk steps (separate counter). */
 	private _stepRequestId = 0;
 	/** Pending hand-walk step resolvers keyed by request id. */
-	private _pendingStepQueries = new Map<number, (tokenId: number | null) => void>();
+	private _pendingStepQueries = new Map<
+		number,
+		(result: { tokenId?: number; row?: Int32Array } | null) => void
+	>();
 	/** Listeners for union-graph responses (owned by the graph store). */
 	private _unionListeners = new Set<(msg: TrajectoryWorkerResponse) => void>();
 	/** The worker instance, created lazily. */
@@ -214,17 +217,73 @@ class TrajectoryStore {
 			beta: number;
 		},
 	): Promise<boolean> {
-		if (!browser || this.stepPending || !this._trail) return false;
+		const step = await this._sampleStep('flip', position, opts);
+		const tokenId = step?.result.tokenId;
+		if (tokenId === undefined) return false;
+		return this.jump(position, tokenId);
+	}
+
+	/**
+	 * Sample every unfrozen position of the visible row once and append the
+	 * returned row, discarding the future and following the new tail. The
+	 * worker applies the freeze mask to the visible row and owns the draws;
+	 * only that one row crosses back.
+	 *
+	 * @param opts - Tokenizer/strategy lookup and the step's $\beta$.
+	 * @returns True when a row was appended.
+	 */
+	async diffuse(opts: {
+		tokenizerId: string;
+		strategyId: string;
+		strategyConfig: Record<string, unknown>;
+		oovTokens?: readonly string[];
+		beta: number;
+	}): Promise<boolean> {
+		const step = await this._sampleStep('diffuse', undefined, opts);
+		const row = step?.result.row;
+		if (!row) return false;
+		return this.append(row);
+	}
+
+	/**
+	 * Append a full row from the visible row: copy every cell, discard the
+	 * future, and follow the new tail.
+	 */
+	append(row: Int32Array): boolean {
+		const trail = this._trail;
+		if (!trail || !trail.append(this.t, row)) return false;
+		this.trajectory = this._wrapTrail(trail);
+		this.t = trail.T;
+		return true;
+	}
+
+	/** Shared one-in-flight step request; returns null when no row may follow. */
+	private async _sampleStep(
+		mode: 'flip' | 'diffuse',
+		position: number | undefined,
+		opts: {
+			tokenizerId: string;
+			strategyId: string;
+			strategyConfig: Record<string, unknown>;
+			oovTokens?: readonly string[];
+			beta: number;
+		},
+	): Promise<{ result: { tokenId?: number; row?: Int32Array } } | null> {
+		if (!browser || this.stepPending || !this._trail) return null;
 		const trail = this._trail;
 		const from = this.t;
-		if (from >= trail.maxSteps || position < 0 || position >= trail.length) return false;
+		if (from >= trail.maxSteps) return null;
+		if (mode === 'flip' && (position === undefined || position < 0 || position >= trail.length)) {
+			return null;
+		}
 
 		const requestId = ++this._stepRequestId;
 		this.stepPending = true;
-		const tokenId = await new Promise<number | null>((resolve) => {
+		const result = await new Promise<{ tokenId?: number; row?: Int32Array } | null>((resolve) => {
 			this._pendingStepQueries.set(requestId, resolve);
 			const msg: TrajectoryWorkerStepRequest = {
 				kind: 'step',
+				mode,
 				requestId,
 				tokenizerId: opts.tokenizerId,
 				strategyId: opts.strategyId,
@@ -235,15 +294,15 @@ class TrajectoryStore {
 				destinationStep: from + 1,
 				beta: opts.beta,
 				row: trail.tokensAt(from).slice(),
-				position,
+				...(position === undefined ? {} : { position }),
 			};
 			this._getWorker().postMessage(msg);
 		});
-		if (tokenId === null) return false;
+		if (!result) return null;
 		// The visible row moved while the draw was in flight; discard it
 		// rather than append to a row the reader did not act from.
-		if (this._trail !== trail || this.t !== from) return false;
-		return this.jump(position, tokenId);
+		if (this._trail !== trail || this.t !== from) return null;
+		return { result };
 	}
 
 	/** Pop the tail row and follow it. A no-op at $T = 0$ or when scrubbed back. */
@@ -425,7 +484,9 @@ class TrajectoryStore {
 			const resolve = this._pendingStepQueries.get(msg.requestId);
 			this._pendingStepQueries.delete(msg.requestId);
 			this.stepPending = false;
-			if (resolve) resolve(msg.kind === 'step' ? msg.tokenId : null);
+			if (resolve) {
+				resolve(msg.kind === 'step' ? { tokenId: msg.tokenId, row: msg.row } : null);
+			}
 			return;
 		}
 

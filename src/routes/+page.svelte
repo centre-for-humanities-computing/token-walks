@@ -454,6 +454,31 @@
 	}
 
 	/**
+	 * Diffuse the visible row: sample every unfrozen position once, append
+	 * the returned row, and re-query the pinned inspector at the same
+	 * position and new step.
+	 */
+	async function handleDiffuse(): Promise<void> {
+		if (trajectoryStore.stepPending) return;
+		const index = hover?.index;
+		const x = hover?.x;
+		const y = hover?.y;
+		const step = trajectoryStore.t;
+		const beta = scheduleStore.instance ? scheduleStore.instance.beta(step) : 0;
+		const ok = await trajectoryStore.diffuse({
+			tokenizerId: tokenizerStore.currentId,
+			strategyId: strategyStore.currentId,
+			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
+			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
+			beta,
+		});
+		if (!ok || !pinned || index === undefined || x === undefined || y === undefined) return;
+		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
+		if (tokenId === undefined) return;
+		queryInspector(tokenId, index, x, y, trajectoryStore.t);
+	}
+
+	/**
 	 * Append the next page of the focused token's stored neighbourhood.
 	 * A jump re-queries the inspector, which starts the new token at page 0.
 	 */
@@ -771,6 +796,16 @@
 			}}
 		>
 			Undo
+		</button>
+
+		<button
+			class="diffuse-btn"
+			data-testid="diffuse-button"
+			disabled={trajectoryStore.stepPending || trajectoryStore.t >= trajectoryStore.maxSteps}
+			title="Sample every unfrozen position once from the visible row"
+			onclick={handleDiffuse}
+		>
+			Diffuse one step
 		</button>
 
 		<div

@@ -64,6 +64,22 @@ export class HandWalk {
 		return true;
 	}
 
+	/**
+	 * Append a full row from visible row `from`: copy every cell of `row`,
+	 * discard the future, and make the copy the new tail. Fails when `from`
+	 * is out of range, `row` is not length $L$, or the step would exceed
+	 * the horizon.
+	 */
+	append(from: number, row: Int32Array): boolean {
+		if (from < 0 || from > this._T) return false;
+		if (from >= this.maxSteps) return false;
+		if (row.length !== this.length) return false;
+
+		this.buffer.set(row, (from + 1) * this.length);
+		this._T = from + 1;
+		return true;
+	}
+
 	/** Pop the tail row; a no-op at $T = 0$. */
 	undo(): boolean {
 		if (this._T === 0) return false;
