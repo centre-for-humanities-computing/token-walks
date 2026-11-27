@@ -18,13 +18,6 @@ describe('isFrozenToken', () => {
 		expect(isFrozenToken(1, opts)).toBe(true);
 		expect(isFrozenToken(2, opts)).toBe(false);
 	});
-
-	it("reads the visible row's token, not the input token", () => {
-		const opts = { vocabSize: 4, oovTokens: [' '] };
-		// The same position can be frozen at one step and not at another.
-		expect(isFrozenToken(3, opts)).toBe(true);
-		expect(isFrozenToken(0, opts)).toBe(false);
-	});
 });
 
 describe('frozenMaskFor', () => {

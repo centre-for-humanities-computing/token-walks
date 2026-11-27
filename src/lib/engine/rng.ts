@@ -23,8 +23,9 @@ export function createRng(seed: number): Rng {
  *
  * A 32-bit avalanche mix of the visible seed and the destination step.
  * No sequence position is mixed in, so Flip and Diffuse at the same
- * destination step deliberately share one random stream: Flip's token is
- * Diffuse's draw for the first unfrozen position.
+ * destination step share one random stream. They need not draw the same
+ * token: Flip forces $\beta = 1$, while Diffuse uses the schedule's
+ * $\beta_t$ and skips frozen positions.
  *
  * @param seed - The visible seed.
  * @param step - The destination step $t+1$.
