@@ -4,7 +4,7 @@ An in-browser playground for walking tokens through networks of similarity.
 Tokenizers cut text into tokens, and a distance function — language-model
 embeddings, spelling, shared letters, WordNet relations — places each one among
 its neighbours. Click a token, then one of its neighbours, to walk it one step at
-a time; scrub back through the rows you built, hover a token to inspect its local
+a time; scrub back through the rows you built, click a token to inspect its local
 neighbourhood, or open the full graph to see the whole network at once.
 Built with SvelteKit and TypeScript, runs entirely in the browser with zero
 server-side compute.

@@ -12,7 +12,8 @@ where the two conflict. See §9 for the reconciliation.
 Token Walks is an in-browser playground for exploring text as **spatially
 embedded**: tokens placed in a space by their embeddings and their relations,
 with networks of similarity drawn between them. The slider is one way to walk a
-token through that network; the hover inspector and the full graph are others.
+token through that network; the click-opened inspector and the full graph are
+others.
 Direct clicks and mixed strategies are the direction, not shipped interactions.
 See `AGENT_CONTEXT.md` for the maths and non-goals, which still hold. This
 document redefines the _experience_ around that walk.
@@ -223,8 +224,8 @@ A single **"Advanced"** (⚙) toggle reveals the technical layer:
   is eligible for corruption. The schedule controls how aggressively the noise
   ramps up."_ The cumulative curve is removed (or shown as a secondary dashed
   line) to keep the focus on the per-step rate.
-- **Per-token transition distribution** on hover/click (the "token inspector"
-  from `AGENT_CONTEXT.md`).
+- **Per-token transition distribution** on click (the "token inspector" from
+  `AGENT_CONTEXT.md`).
 - **Diagnostics** (connectivity / stationary distribution).
 - Raw token IDs, $\beta_t$ value at current $t$, seed internals.
 

@@ -32,7 +32,7 @@
 	import EmbeddingParams from '$lib/components/EmbeddingParams.svelte';
 	import ScheduleParams from '$lib/components/ScheduleParams.svelte';
 	import AdvancedPanel from '$lib/components/AdvancedPanel.svelte';
-	import TokenTooltip from '$lib/components/TokenTooltip.svelte';
+	import TokenDialog from '$lib/components/TokenDialog.svelte';
 	import { inspectionStore } from '$lib/stores/inspection.svelte.js';
 	import { hashIds } from '$lib/engine/trajectory-cache.js';
 	import { NEIGHBOR_LIST_PAGE_SIZE } from '$lib/strategies/neighbor-list.js';
@@ -92,7 +92,7 @@
 		].join('|');
 	});
 
-	/** Inputs a pinned inspector reads; a change re-queries without touching rows. */
+	/** Inputs an open inspector reads; a change re-queries without touching rows. */
 	const inspectorKey = $derived.by(() =>
 		[
 			strategyStore.currentId,
@@ -162,8 +162,8 @@
 		// Ignore when focus is inside a text input, textarea, or select.
 		const tag = (e.target as HTMLElement).tagName;
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-		if (e.key === 'Escape' && pinned) {
-			unpin();
+		if (e.key === 'Escape' && inspector) {
+			closeInspector();
 			return;
 		}
 		if (!canStep) return;
@@ -254,7 +254,7 @@
 		return tok.decode(filtered);
 	});
 
-	// Per-token character spans for the prose view (hover + taper).
+	// Per-token character spans for the prose view (inspector + taper).
 	const tokenSpans = $derived.by(() => {
 		const tok = tokenizerStore.tokenizer;
 		if (!tok || displayTokens.ids.length === 0) return [];
@@ -269,9 +269,9 @@
 		);
 	});
 
-	// ===== Token inspector (hover tooltip) =====
+	// ===== Token inspector =====
 
-	type HoverState = {
+	type InspectorState = {
 		tokenId: number;
 		index: number;
 		step: number;
@@ -285,11 +285,9 @@
 		frozen: boolean;
 	};
 
-	let hover: HoverState | null = $state(null);
-	/** True while a click pinned the inspector at a position and time. */
-	let pinned: boolean = $state(false);
+	let inspector: InspectorState | null = $state(null);
 	/** Monotonic id to ignore stale neighbor-query results. */
-	let hoverQueryId = 0;
+	let queryId = 0;
 	/** True while a "Load more" page is in flight; ignores extra clicks. */
 	let listPagePending = false;
 	/** Monotonic id to drop a page that a newer inspector superseded. */
@@ -327,7 +325,7 @@
 		const traj = trajectoryStore.trajectory;
 		if (!tok || !traj) return;
 
-		hover = {
+		inspector = {
 			tokenId,
 			index,
 			step,
@@ -352,7 +350,7 @@
 		const betas = new Float32Array(step);
 		for (let s = 0; s < step; s++) betas[s] = schedule ? schedule.beta(s) : 0;
 
-		const queryId = ++hoverQueryId;
+		const query = ++queryId;
 		trajectoryStore
 			.queryNeighbors({
 				tokenizerId: tokenizerStore.currentId,
@@ -369,53 +367,40 @@
 			})
 			.then((graph) => {
 				// Ignore stale results (mouse moved to another token).
-				if (queryId !== hoverQueryId || !hover) return;
+				if (query !== queryId || !inspector) return;
 				// A provider-less strategy stays unavailable even when the
 				// trajectory chain itself could be drawn.
-				const status = hover.status === 'unavailable' ? 'unavailable' : 'ready';
-				hover = { ...hover, status, graph, frozen: graph.frozen ?? false };
+				const status = inspector.status === 'unavailable' ? 'unavailable' : 'ready';
+				inspector = { ...inspector, status, graph, frozen: graph.frozen ?? false };
 			})
 			.catch(() => {
-				if (queryId !== hoverQueryId || !hover) return;
-				hover = { ...hover, status: 'error', graph: null };
+				if (query !== queryId || !inspector) return;
+				inspector = { ...inspector, status: 'error', graph: null };
 			});
 
-		// Hover stays graph-only; the shelf belongs to the pinned inspector.
-		if (pinned) {
-			queryNeighborListPage(tokenId, 0).then((list) => {
-				if (queryId !== hoverQueryId || !hover || !list) return;
-				hover = {
-					...hover,
-					list,
-					status: list.hasNeighborhood ? hover.status : 'unavailable',
-				};
-			});
-		}
-	}
-
-	/** White-space is frozen; its inspector would only repeat itself. */
-	function skipInspect(index: number): boolean {
-		const displayed = displayTokens.tokens[index];
-		return tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n');
+		queryNeighborListPage(tokenId, 0).then((list) => {
+			if (query !== queryId || !inspector || !list) return;
+			inspector = {
+				...inspector,
+				list,
+				status: list.hasNeighborhood ? inspector.status : 'unavailable',
+			};
+		});
 	}
 
 	/**
-	 * Hover previews the inspector but never pins. While a token is pinned,
-	 * pointer movement into the tooltip must not close or replace it.
+	 * Whether a click at this position can open the inspector. White-space
+	 * under `words` is frozen, so its inspector would only repeat itself.
 	 */
-	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
-		const tok = tokenizerStore.tokenizer;
-		const traj = trajectoryStore.trajectory;
-		if (!tok || !traj || pinned || skipInspect(index)) return;
-		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	function inspectable(index: number): boolean {
+		if (!tokenizerStore.tokenizer || !trajectoryStore.trajectory) return false;
+		const displayed = displayTokens.tokens[index];
+		return !(tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n'));
 	}
 
-	/** Click/Enter/Space pins the clicked position and time. */
+	/** Click/Enter/Space opens the inspector at the clicked position and time. */
 	function handleTokenPin(tokenId: number, index: number, rect: DOMRect): void {
-		const tok = tokenizerStore.tokenizer;
-		const traj = trajectoryStore.trajectory;
-		if (!tok || !traj || skipInspect(index)) return;
-		pinned = true;
+		if (!inspectable(index)) return;
 		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
 	}
 
@@ -424,42 +409,42 @@
 	 * future), then re-queries the inspector at the same position and new time.
 	 */
 	function handleNeighborPick(tokenId: number): void {
-		if (!pinned || !hover) return;
-		const index = hover.index;
+		if (!inspector) return;
+		const index = inspector.index;
 		if (!trajectoryStore.jump(index, tokenId)) return;
-		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+		queryInspector(tokenId, index, inspector.x, inspector.y, trajectoryStore.t);
 	}
 
 	/**
-	 * Flip the pinned position: force a jump to one next token from the
+	 * Flip the open position: force a jump to one next token from the
 	 * active kernel, append the row, and re-query the inspector at the same
 	 * position and new step.
 	 */
 	async function handleFlip(): Promise<void> {
-		if (!pinned || !hover || trajectoryStore.stepPending) return;
-		const index = hover.index;
+		if (!inspector || trajectoryStore.stepPending) return;
+		const index = inspector.index;
 		const ok = await trajectoryStore.flip(index, {
 			tokenizerId: tokenizerStore.currentId,
 			strategyId: strategyStore.currentId,
 			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
 			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 		});
-		if (!ok || !pinned || !hover) return;
+		if (!ok || !inspector) return;
 		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
 		if (tokenId === undefined) return;
-		queryInspector(tokenId, index, hover.x, hover.y, trajectoryStore.t);
+		queryInspector(tokenId, index, inspector.x, inspector.y, trajectoryStore.t);
 	}
 
 	/**
 	 * Diffuse the visible row: sample every unfrozen position once, append
-	 * the returned row, and re-query the pinned inspector at the same
+	 * the returned row, and re-query the inspector at the same
 	 * position and new step.
 	 */
 	async function handleDiffuse(): Promise<void> {
 		if (trajectoryStore.stepPending) return;
-		const index = hover?.index;
-		const x = hover?.x;
-		const y = hover?.y;
+		const index = inspector?.index;
+		const x = inspector?.x;
+		const y = inspector?.y;
 		const step = trajectoryStore.t;
 		const beta = scheduleStore.instance ? scheduleStore.instance.beta(step) : 0;
 		const ok = await trajectoryStore.diffuse({
@@ -469,7 +454,7 @@
 			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 			beta,
 		});
-		if (!ok || !pinned || index === undefined || x === undefined || y === undefined) return;
+		if (!ok || index === undefined || x === undefined || y === undefined) return;
 		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
 		if (tokenId === undefined) return;
 		queryInspector(tokenId, index, x, y, trajectoryStore.t);
@@ -480,41 +465,49 @@
 	 * A jump re-queries the inspector, which starts the new token at page 0.
 	 */
 	function loadMoreNeighborList(): void {
-		const list = hover?.list;
-		if (!pinned || !hover || !list || listPagePending || list.entries.length >= list.total) return;
-		const queryId = hoverQueryId;
-		const tokenId = hover.tokenId;
+		const list = inspector?.list;
+		if (!inspector || !list || listPagePending || list.entries.length >= list.total) return;
+		const query = queryId;
+		const tokenId = inspector.tokenId;
 		const requestId = ++listPageRequest;
 		listPagePending = true;
 		queryNeighborListPage(tokenId, list.entries.length).then((page) => {
 			// A newer inspector or page superseded this one.
 			if (requestId !== listPageRequest) return;
 			listPagePending = false;
-			if (queryId !== hoverQueryId || !hover?.list || !page) return;
-			hover = {
-				...hover,
-				list: { ...page, entries: [...hover.list.entries, ...page.entries] },
+			if (query !== queryId || !inspector?.list || !page) return;
+			inspector = {
+				...inspector,
+				list: { ...page, entries: [...inspector.list.entries, ...page.entries] },
 			};
 		});
 	}
 
-	/** Escape or the close button removes the pinned inspector. */
-	function unpin(): void {
-		pinned = false;
-		hoverQueryId++;
-		hover = null;
+	/** Escape, the close button or a pointer-down outside closes the inspector. */
+	function closeInspector(): void {
+		queryId++;
+		inspector = null;
 	}
 
-	/** Move the history scrubber; a pinned inspector belongs to the old row. */
+	/**
+	 * Close on a pointer-down outside the dialog. Token targets and Diffuse
+	 * are exempt: a token click replaces the dialog in one gesture, and
+	 * Diffuse re-queries it at the new step.
+	 */
+	function handleOutsidePointerDown(e: PointerEvent): void {
+		if (!inspector) return;
+		const target = e.target as HTMLElement | null;
+		if (!target) return;
+		const exempt = target.closest(
+			'.token-dialog, .chip, [data-testid="prose-token"], [data-testid="diffuse-button"]',
+		);
+		if (!exempt) closeInspector();
+	}
+
+	/** Move the history scrubber; an open inspector belongs to the old row. */
 	function setTime(t: number): void {
 		trajectoryStore.t = t;
-		if (pinned) unpin();
-	}
-
-	function handleTokenUnhover(): void {
-		if (pinned) return;
-		hoverQueryId++;
-		hover = null;
+		if (inspector) closeInspector();
 	}
 
 	// Changed count: positions with recency === 1 (changed this step).
@@ -578,17 +571,23 @@
 		if (!tokenizerStore.tokenizer || ids.length === 0) return;
 		untrack(() => {
 			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T });
-			if (pinned) unpin();
+			if (inspector) closeInspector();
 		});
 	});
 
-	// A kernel or spread change re-queries a pinned inspector; the built rows
+	// A kernel or spread change re-queries an open inspector; the built rows
 	// stay untouched (AC8).
 	$effect(() => {
 		if (!inspectorKey) return;
 		untrack(() => {
-			if (pinned && hover) {
-				queryInspector(hover.tokenId, hover.index, hover.x, hover.y, hover.step);
+			if (inspector) {
+				queryInspector(
+					inspector.tokenId,
+					inspector.index,
+					inspector.x,
+					inspector.y,
+					inspector.step,
+				);
 			}
 		});
 	});
@@ -643,6 +642,7 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
+<svelte:document onpointerdown={handleOutsidePointerDown} />
 
 <main>
 	<h1>Token Walks</h1>
@@ -728,8 +728,8 @@
 							tokens={displayTokens.tokens}
 							ids={displayTokens.ids}
 							recency={tokenRecency}
-							onhover={handleTokenHover}
-							onunhover={handleTokenUnhover}
+							{inspectable}
+							pinnedIndex={inspector?.index ?? null}
 							onpin={handleTokenPin}
 						/>
 					{:else if viewStore.display === 'graph'}
@@ -747,8 +747,8 @@
 						<InlineTokens
 							text={decodedText}
 							spans={tokenSpans}
-							onhover={handleTokenHover}
-							onunhover={handleTokenUnhover}
+							{inspectable}
+							pinnedIndex={inspector?.index ?? null}
 							onpin={handleTokenPin}
 						/>
 					{/if}
@@ -756,22 +756,21 @@
 			</div>
 		{/if}
 
-		{#if hover}
-			<TokenTooltip
-				x={hover.x}
-				y={hover.y}
-				state={hover.status}
-				graph={hover.graph}
-				list={hover.list}
-				{pinned}
-				focusId={hover.tokenId}
-				focusStep={hover.step}
-				frozen={hover.frozen}
+		{#if inspector}
+			<TokenDialog
+				x={inspector.x}
+				y={inspector.y}
+				state={inspector.status}
+				graph={inspector.graph}
+				list={inspector.list}
+				focusId={inspector.tokenId}
+				focusStep={inspector.step}
+				frozen={inspector.frozen}
 				epsilon={activeEpsilon}
 				flipping={trajectoryStore.stepPending}
 				atHorizon={trajectoryStore.t >= trajectoryStore.maxSteps}
 				onflip={handleFlip}
-				onclose={unpin}
+				onclose={closeInspector}
 				onpick={handleNeighborPick}
 				onloadmore={loadMoreNeighborList}
 			/>
@@ -789,7 +788,7 @@
 			class="undo-btn"
 			disabled={maxStep === 0 || trajectoryStore.t !== maxStep}
 			onclick={() => {
-				if (trajectoryStore.undo()) unpin();
+				if (trajectoryStore.undo()) closeInspector();
 			}}
 		>
 			Undo

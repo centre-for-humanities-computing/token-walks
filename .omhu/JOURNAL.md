@@ -57,3 +57,7 @@ Noticed: the walk's "Decided" bullets kept M2–M6 as five slots with click insi
 ## 2026-11-27 — implement — the target and the gate pull in opposite directions
 
 Noticed: slice 1 first measured 505 changed lines, over the 500 gate, and was trimmed to 492 by shortening docs; slice 2 then landed at 417, over the 400 target but under the gate, mostly from moving the freeze helpers and growing the seeded differential.
+
+## 2026-11-28 — implement — where did the estimate leak?
+
+Noticed: slice 2 measured 310 changed lines against the plan's ~150 estimate, mostly because the outline rules, the outside-pointerdown exemption list and the dialog chrome each rewrote in place; slices 1 and 3 landed at 121 and 56 against ~140 and ~60.

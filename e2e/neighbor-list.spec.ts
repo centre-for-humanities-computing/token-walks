@@ -21,19 +21,19 @@ async function openTrail(page: Page): Promise<void> {
 	});
 }
 
-/** Click a prose token and wait for its pinned inspector. */
+/** Click a prose token and wait for its inspector. */
 async function pin(page: Page, index: number): Promise<void> {
 	await page.getByTestId('prose-token').nth(index).click();
-	await expect(page.getByRole('tooltip')).toBeVisible({ timeout: TIMEOUT });
+	await expect(page.getByRole('dialog')).toBeVisible({ timeout: TIMEOUT });
 }
 
-/** Jump to the first neighbour node in the pinned inspector. */
+/** Jump to the first neighbour node in the inspector. */
 async function pick(page: Page): Promise<void> {
-	const tooltip = page.getByRole('tooltip');
-	const node = tooltip.locator('g.node.neighbor[role="button"]').first();
+	const dialog = page.getByRole('dialog');
+	const node = dialog.locator('g.node.neighbor[role="button"]').first();
 	await expect(node).toBeVisible({ timeout: TIMEOUT });
 	await node.locator('circle').click();
-	await expect(tooltip).toBeVisible();
+	await expect(dialog).toBeVisible();
 }
 
 test('neighbor list: pages past eight and resets after a jump', async ({ page }) => {
@@ -46,19 +46,19 @@ test('neighbor list: pages past eight and resets after a jump', async ({ page })
 	await openTrail(page);
 	await page.getByTestId('prose-token').nth(1).click();
 
-	const tooltip = page.getByRole('tooltip');
-	const rows = tooltip.locator('.neighbor-list .row');
+	const dialog = page.getByRole('dialog');
+	const rows = dialog.locator('.neighbor-list .row');
 	await expect(rows.first()).toBeVisible({ timeout: TIMEOUT });
-	await expect(tooltip.locator('.neighbor-list .caption')).toContainText('Neighbours (');
+	await expect(dialog.locator('.neighbor-list .caption')).toContainText('Neighbours (');
 
 	// The graph keeps its top-eight overview while the list reaches further.
-	const graphNodes = await tooltip.locator('g.node.neighbor').count();
+	const graphNodes = await dialog.locator('g.node.neighbor').count();
 	expect(graphNodes).toBeLessThanOrEqual(8);
 	const firstPage = await rows.count();
 	expect(firstPage).toBeGreaterThan(8);
 
 	// "Load more" appends the next page; no gaps or duplicates by construction.
-	await tooltip.getByRole('button', { name: 'Load more' }).click();
+	await dialog.getByRole('button', { name: 'Load more' }).click();
 	await expect.poll(() => rows.count()).toBeGreaterThan(firstPage);
 
 	// A row beyond the graph's eight is a legal jump: one row appended.
@@ -104,8 +104,8 @@ test('neighbor list: jumps to a row the kernel never offered', async ({ page }) 
 	const row0 = (await readProse(page))!;
 
 	await pin(page, 2);
-	const tooltip = page.getByRole('tooltip');
-	const rows = tooltip.locator('.neighbor-list .row');
+	const dialog = page.getByRole('dialog');
+	const rows = dialog.locator('.neighbor-list .row');
 	await expect(rows.first()).toBeVisible({ timeout: TIMEOUT });
 	const dists = await rows.locator('.dist').allTextContents();
 	const far = dists.findIndex((d) => Number(d) >= 2);

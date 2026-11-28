@@ -81,6 +81,12 @@ A line named in an open issue's `**Compost:**` line is scheduled; `/implement` d
 - 2026-11-27 — Precomputing a future row; only the pinned candidate list is eager — 1 — plan 1 on #115
 - 2026-11-27 — A frozen/unfrozen overlay; the inspector note stands in for now — 1 — plan 1 on #115
 - 2026-11-27 — Separating the Flip and Diffuse streams; they share a destination-step stream by decision — 1 — plan 1 on #115
+- 2026-11-28 — Neighbours or the chain on hover; hover is an outline only. — 1 — plan 1 on #123
+- 2026-11-28 — The radial arc, chain strip and random button; children 2 and 4. — 1 — plan 1 on #123
+- 2026-11-28 — Deleting `NeighborGraph` or `NeighborList`; children 5 and 6. — 1 — plan 1 on #123
+- 2026-11-28 — Focus trapping; the dialog is non-modal. — 1 — plan 1 on #123
+- 2026-11-28 — Touch gestures; click, keyboard and wheel only. — 1 — plan 1 on #123
+- 2026-11-28 — A WordNet freeze mask to the page; frozen tokens stay blue until the dialog's note. — 1 — plan 1 on #123
 - Promoted: click/jump half to #113; mixed-strategies half stays for #60.
 - Promoted: all-neighbours list and forced jumps to #114.
 - Promoted: random flip and one-step diffusion to #115.

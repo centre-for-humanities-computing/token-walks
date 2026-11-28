@@ -5,15 +5,15 @@
 		text: string;
 		/** Per-token character spans (from `allTokenCharSpans`). */
 		spans?: readonly TokenCharSpan[];
-		/** Called on token hover with the token id, its index, and bounding rect. */
-		onhover?: (tokenId: number, index: number, rect: DOMRect) => void;
-		/** Called when the pointer leaves a token span. */
-		onunhover?: () => void;
-		/** Called on click/Enter/Space to pin the inspector. */
+		/** Whether a click on this position can open the inspector. */
+		inspectable?: (index: number) => boolean;
+		/** Position whose inspector is currently open. */
+		pinnedIndex?: number | null;
+		/** Called on click/Enter/Space to open the inspector. */
 		onpin?: (tokenId: number, index: number, rect: DOMRect) => void;
 	}
 
-	let { text, spans = [], onhover, onunhover, onpin }: Props = $props();
+	let { text, spans = [], inspectable, pinnedIndex = null, onpin }: Props = $props();
 
 	/**
 	 * Split `text` into per-token segments. Each span contributes its slice
@@ -50,6 +50,8 @@
 			{#if seg.span}
 				<span
 					class="taper"
+					class:inspectable={inspectable?.(seg.span.index)}
+					class:pinned={pinnedIndex === seg.span.index}
 					style="--r: {seg.span.recency}"
 					data-testid="prose-token"
 					data-start={seg.span.start}
@@ -58,12 +60,6 @@
 					role="button"
 					tabindex={0}
 					aria-label="token {seg.text}"
-					onmouseenter={(e) =>
-						onhover?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect())}
-					onmouseleave={() => onunhover?.()}
-					onfocus={(e) =>
-						onhover?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect())}
-					onblur={() => onunhover?.()}
 					onclick={(e) =>
 						onpin?.(seg.span!.tokenId, seg.span!.index, e.currentTarget.getBoundingClientRect())}
 					onkeydown={(e) => {
@@ -89,6 +85,19 @@
 		margin: 0;
 	}
 
+	.taper:hover,
+	.taper:focus-visible {
+		outline: 2px solid #3b82f6;
+		outline-offset: 1px;
+	}
+	.taper:not(.inspectable):hover,
+	.taper:not(.inspectable):focus-visible {
+		outline-color: #e8a0a0;
+	}
+	.taper.pinned {
+		outline: 2px solid #1d4ed8;
+		outline-offset: 1px;
+	}
 	.taper {
 		/*
 		 * Fading highlight: recency $r \in [0, 1]$ drives the background
