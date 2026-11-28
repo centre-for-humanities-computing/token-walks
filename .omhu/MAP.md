@@ -23,7 +23,8 @@ The app name lives in `src/routes/+layout.svelte` (header and `<title>`) and
 `DESIGN.md` §1/§8. First load opens on the lexical strategy over GPT-2 with the
 encoded input as one row at $t = 0$; no trajectory is requested. Edit returns
 to the text, and the embedding bundle is fetched only when an embedding walk is
-chosen.
+chosen. Clicking a prose token opens the named `TokenDialog` inspector (not on
+hover); Escape, its × and a pointer-down outside close it, and it is non-modal.
 
 ## WordNet
 
