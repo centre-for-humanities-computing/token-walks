@@ -22,19 +22,19 @@ async function openTrail(page: Page): Promise<void> {
 	await expect(page.getByTestId('t-max')).toHaveText('0');
 }
 
-/** Click a prose token and wait for its pinned inspector. */
+/** Click a prose token and wait for its inspector. */
 async function pin(page: Page, index: number): Promise<void> {
 	await page.getByTestId('prose-token').nth(index).click();
-	await expect(page.getByRole('tooltip')).toBeVisible({ timeout: TIMEOUT });
+	await expect(page.getByRole('dialog')).toBeVisible({ timeout: TIMEOUT });
 }
 
-/** Jump to the first neighbour node in the pinned inspector. */
+/** Jump to the first neighbour node in the inspector. */
 async function pick(page: Page): Promise<void> {
-	const tooltip = page.getByRole('tooltip');
-	const node = tooltip.locator('g.node.neighbor[role="button"]').first();
+	const dialog = page.getByRole('dialog');
+	const node = dialog.locator('g.node.neighbor[role="button"]').first();
 	await expect(node).toBeVisible({ timeout: TIMEOUT });
 	await node.locator('circle').click();
-	await expect(tooltip).toBeVisible();
+	await expect(dialog).toBeVisible();
 }
 
 test('hand-walk: start, pin, jump, branch and undo', async ({ page }) => {
@@ -55,9 +55,9 @@ test('hand-walk: start, pin, jump, branch and undo', async ({ page }) => {
 
 	// AC3: click pins the inspector at position 1; the chain shows the token.
 	await pin(page, 1);
-	const tooltip = page.getByRole('tooltip');
-	await expect(tooltip.locator('svg')).toContainText('quick', { timeout: TIMEOUT });
-	await expect(tooltip.getByRole('button', { name: 'Close inspector' })).toBeVisible();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog.locator('svg')).toContainText('quick', { timeout: TIMEOUT });
+	await expect(dialog.getByRole('button', { name: 'Close inspector' })).toBeVisible();
 
 	// AC4: a neighbour pick appends one row and follows it.
 	await pick(page);
@@ -81,11 +81,11 @@ test('hand-walk: start, pin, jump, branch and undo', async ({ page }) => {
 	await expect(page.getByTestId('t-max')).toHaveText('1');
 	expect((await readProse(page))!.text).toBe(row1.text);
 
-	// Scrubbing closes the pinned inspector so the branch point and focus
+	// Scrubbing closes the inspector so the branch point and focus
 	// agree; the next pin belongs to the visible row.
 	await pin(page, 1);
 	await page.getByTestId('time-slider').fill('0');
-	await expect(page.getByRole('tooltip')).toHaveCount(0);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
 	await expect(page.locator('.readout')).toContainText('t = 0 / 1');
 
 	// Branch from row 0: the future is replaced, not appended at 3.

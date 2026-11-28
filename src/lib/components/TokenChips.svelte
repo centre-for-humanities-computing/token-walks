@@ -3,15 +3,15 @@
 		tokens: readonly string[];
 		ids: Int32Array;
 		recency: Float32Array;
-		/** Called on chip hover with the token id, its index, and bounding rect. */
-		onhover?: (tokenId: number, index: number, rect: DOMRect) => void;
-		/** Called when the pointer leaves a chip. */
-		onunhover?: () => void;
-		/** Called on click/Enter/Space to pin the inspector. */
+		/** Whether a click on this position can open the inspector. */
+		inspectable?: (index: number) => boolean;
+		/** Position whose inspector is currently open. */
+		pinnedIndex?: number | null;
+		/** Called on click/Enter/Space to open the inspector. */
 		onpin?: (tokenId: number, index: number, rect: DOMRect) => void;
 	}
 
-	let { tokens, ids, recency, onhover, onunhover, onpin }: Props = $props();
+	let { tokens, ids, recency, inspectable, pinnedIndex = null, onpin }: Props = $props();
 
 	/**
 	 * Make whitespace and control characters visible in chip labels.
@@ -28,21 +28,12 @@
 		<span
 			class="chip"
 			class:changed={recency[i]! > 0}
+			class:inspectable={inspectable?.(i)}
+			class:pinned={pinnedIndex === i}
 			style="--r: {recency[i]!}"
-			title="id: {ids[i] ?? '?'}"
 			role="button"
 			tabindex={0}
 			aria-label="token {visibleToken(token)}"
-			onmouseenter={(e) => {
-				const id = ids[i];
-				if (id !== undefined && onhover) onhover(id, i, e.currentTarget.getBoundingClientRect());
-			}}
-			onmouseleave={() => onunhover?.()}
-			onfocus={(e) => {
-				const id = ids[i];
-				if (id !== undefined && onhover) onhover(id, i, e.currentTarget.getBoundingClientRect());
-			}}
-			onblur={() => onunhover?.()}
 			onclick={(e) => {
 				const id = ids[i];
 				if (id !== undefined && onpin) onpin(id, i, e.currentTarget.getBoundingClientRect());
@@ -89,6 +80,19 @@
 		transition:
 			background 0.15s,
 			border-color 0.15s;
+	}
+	.chip:hover,
+	.chip:focus-visible {
+		outline: 2px solid #3b82f6;
+		outline-offset: 1px;
+	}
+	.chip:not(.inspectable):hover,
+	.chip:not(.inspectable):focus-visible {
+		outline-color: #e8a0a0;
+	}
+	.chip.pinned {
+		outline: 2px solid #1d4ed8;
+		outline-offset: 1px;
 	}
 	.chip-token {
 		color: #222;

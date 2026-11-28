@@ -81,7 +81,7 @@
 	<section class="panel-section">
 		<h4 class="section-heading">Token inspector</h4>
 		<p class="hint">
-			Hover a token in the noisy view to see its local neighborhood. These settings control how many
+			Click a token in the noisy view to open its inspector. These settings control how many
 			neighbors are shown per hop.
 		</p>
 		<div class="inspector-controls">

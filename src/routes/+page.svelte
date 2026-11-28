@@ -92,7 +92,7 @@
 		].join('|');
 	});
 
-	/** Inputs a pinned inspector reads; a change re-queries without touching rows. */
+	/** Inputs an open inspector reads; a change re-queries without touching rows. */
 	const inspectorKey = $derived.by(() =>
 		[
 			strategyStore.currentId,
@@ -162,8 +162,8 @@
 		// Ignore when focus is inside a text input, textarea, or select.
 		const tag = (e.target as HTMLElement).tagName;
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-		if (e.key === 'Escape' && pinned) {
-			unpin();
+		if (e.key === 'Escape' && inspector) {
+			closeInspector();
 			return;
 		}
 		if (!canStep) return;
@@ -254,7 +254,7 @@
 		return tok.decode(filtered);
 	});
 
-	// Per-token character spans for the prose view (hover + taper).
+	// Per-token character spans for the prose view (inspector + taper).
 	const tokenSpans = $derived.by(() => {
 		const tok = tokenizerStore.tokenizer;
 		if (!tok || displayTokens.ids.length === 0) return [];
@@ -286,8 +286,6 @@
 	};
 
 	let inspector: InspectorState | null = $state(null);
-	/** True while a click pinned the inspector at a position and time. */
-	let pinned: boolean = $state(false);
 	/** Monotonic id to ignore stale neighbor-query results. */
 	let queryId = 0;
 	/** True while a "Load more" page is in flight; ignores extra clicks. */
@@ -380,42 +378,29 @@
 				inspector = { ...inspector, status: 'error', graph: null };
 			});
 
-		// Hover stays graph-only; the shelf belongs to the pinned inspector.
-		if (pinned) {
-			queryNeighborListPage(tokenId, 0).then((list) => {
-				if (query !== queryId || !inspector || !list) return;
-				inspector = {
-					...inspector,
-					list,
-					status: list.hasNeighborhood ? inspector.status : 'unavailable',
-				};
-			});
-		}
-	}
-
-	/** White-space is frozen; its inspector would only repeat itself. */
-	function skipInspect(index: number): boolean {
-		const displayed = displayTokens.tokens[index];
-		return tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n');
+		queryNeighborListPage(tokenId, 0).then((list) => {
+			if (query !== queryId || !inspector || !list) return;
+			inspector = {
+				...inspector,
+				list,
+				status: list.hasNeighborhood ? inspector.status : 'unavailable',
+			};
+		});
 	}
 
 	/**
-	 * Hover previews the inspector but never pins. While a token is pinned,
-	 * pointer movement into the tooltip must not close or replace it.
+	 * Whether a click at this position can open the inspector. White-space
+	 * under `words` is frozen, so its inspector would only repeat itself.
 	 */
-	function handleTokenHover(tokenId: number, index: number, rect: DOMRect): void {
-		const tok = tokenizerStore.tokenizer;
-		const traj = trajectoryStore.trajectory;
-		if (!tok || !traj || pinned || skipInspect(index)) return;
-		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
+	function inspectable(index: number): boolean {
+		if (!tokenizerStore.tokenizer || !trajectoryStore.trajectory) return false;
+		const displayed = displayTokens.tokens[index];
+		return !(tokenizerStore.currentId === 'words' && (displayed === ' ' || displayed === '\n'));
 	}
 
-	/** Click/Enter/Space pins the clicked position and time. */
+	/** Click/Enter/Space opens the inspector at the clicked position and time. */
 	function handleTokenPin(tokenId: number, index: number, rect: DOMRect): void {
-		const tok = tokenizerStore.tokenizer;
-		const traj = trajectoryStore.trajectory;
-		if (!tok || !traj || skipInspect(index)) return;
-		pinned = true;
+		if (!inspectable(index)) return;
 		queryInspector(tokenId, index, rect.left, rect.top, trajectoryStore.t);
 	}
 
@@ -424,19 +409,19 @@
 	 * future), then re-queries the inspector at the same position and new time.
 	 */
 	function handleNeighborPick(tokenId: number): void {
-		if (!pinned || !inspector) return;
+		if (!inspector) return;
 		const index = inspector.index;
 		if (!trajectoryStore.jump(index, tokenId)) return;
 		queryInspector(tokenId, index, inspector.x, inspector.y, trajectoryStore.t);
 	}
 
 	/**
-	 * Flip the pinned position: force a jump to one next token from the
+	 * Flip the open position: force a jump to one next token from the
 	 * active kernel, append the row, and re-query the inspector at the same
 	 * position and new step.
 	 */
 	async function handleFlip(): Promise<void> {
-		if (!pinned || !inspector || trajectoryStore.stepPending) return;
+		if (!inspector || trajectoryStore.stepPending) return;
 		const index = inspector.index;
 		const ok = await trajectoryStore.flip(index, {
 			tokenizerId: tokenizerStore.currentId,
@@ -444,7 +429,7 @@
 			strategyConfig: activeStrategyConfig(trajectoryStore.vocabSize),
 			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 		});
-		if (!ok || !pinned || !inspector) return;
+		if (!ok || !inspector) return;
 		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
 		if (tokenId === undefined) return;
 		queryInspector(tokenId, index, inspector.x, inspector.y, trajectoryStore.t);
@@ -452,7 +437,7 @@
 
 	/**
 	 * Diffuse the visible row: sample every unfrozen position once, append
-	 * the returned row, and re-query the pinned inspector at the same
+	 * the returned row, and re-query the inspector at the same
 	 * position and new step.
 	 */
 	async function handleDiffuse(): Promise<void> {
@@ -469,7 +454,7 @@
 			oovTokens: tokenizerStore.tokenizer?.oovTokens ?? [],
 			beta,
 		});
-		if (!ok || !pinned || index === undefined || x === undefined || y === undefined) return;
+		if (!ok || index === undefined || x === undefined || y === undefined) return;
 		const tokenId = trajectoryStore.trajectory?.tokensAt(trajectoryStore.t)[index];
 		if (tokenId === undefined) return;
 		queryInspector(tokenId, index, x, y, trajectoryStore.t);
@@ -481,8 +466,7 @@
 	 */
 	function loadMoreNeighborList(): void {
 		const list = inspector?.list;
-		if (!pinned || !inspector || !list || listPagePending || list.entries.length >= list.total)
-			return;
+		if (!inspector || !list || listPagePending || list.entries.length >= list.total) return;
 		const query = queryId;
 		const tokenId = inspector.tokenId;
 		const requestId = ++listPageRequest;
@@ -499,23 +483,31 @@
 		});
 	}
 
-	/** Escape or the close button removes the pinned inspector. */
-	function unpin(): void {
-		pinned = false;
+	/** Escape, the close button or a pointer-down outside closes the inspector. */
+	function closeInspector(): void {
 		queryId++;
 		inspector = null;
 	}
 
-	/** Move the history scrubber; a pinned inspector belongs to the old row. */
+	/**
+	 * Close on a pointer-down outside the dialog. Token targets and Diffuse
+	 * are exempt: a token click replaces the dialog in one gesture, and
+	 * Diffuse re-queries it at the new step.
+	 */
+	function handleOutsidePointerDown(e: PointerEvent): void {
+		if (!inspector) return;
+		const target = e.target as HTMLElement | null;
+		if (!target) return;
+		const exempt = target.closest(
+			'.token-dialog, .chip, [data-testid="prose-token"], [data-testid="diffuse-button"]',
+		);
+		if (!exempt) closeInspector();
+	}
+
+	/** Move the history scrubber; an open inspector belongs to the old row. */
 	function setTime(t: number): void {
 		trajectoryStore.t = t;
-		if (pinned) unpin();
-	}
-
-	function handleTokenUnhover(): void {
-		if (pinned) return;
-		queryId++;
-		inspector = null;
+		if (inspector) closeInspector();
 	}
 
 	// Changed count: positions with recency === 1 (changed this step).
@@ -579,16 +571,16 @@
 		if (!tokenizerStore.tokenizer || ids.length === 0) return;
 		untrack(() => {
 			trajectoryStore.begin(ids, { vocabSize: encoded.vocabSize, maxSteps: scheduleStore.T });
-			if (pinned) unpin();
+			if (inspector) closeInspector();
 		});
 	});
 
-	// A kernel or spread change re-queries a pinned inspector; the built rows
+	// A kernel or spread change re-queries an open inspector; the built rows
 	// stay untouched (AC8).
 	$effect(() => {
 		if (!inspectorKey) return;
 		untrack(() => {
-			if (pinned && inspector) {
+			if (inspector) {
 				queryInspector(
 					inspector.tokenId,
 					inspector.index,
@@ -650,6 +642,7 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
+<svelte:document onpointerdown={handleOutsidePointerDown} />
 
 <main>
 	<h1>Token Walks</h1>
@@ -735,8 +728,8 @@
 							tokens={displayTokens.tokens}
 							ids={displayTokens.ids}
 							recency={tokenRecency}
-							onhover={handleTokenHover}
-							onunhover={handleTokenUnhover}
+							{inspectable}
+							pinnedIndex={inspector?.index ?? null}
 							onpin={handleTokenPin}
 						/>
 					{:else if viewStore.display === 'graph'}
@@ -754,8 +747,8 @@
 						<InlineTokens
 							text={decodedText}
 							spans={tokenSpans}
-							onhover={handleTokenHover}
-							onunhover={handleTokenUnhover}
+							{inspectable}
+							pinnedIndex={inspector?.index ?? null}
 							onpin={handleTokenPin}
 						/>
 					{/if}
@@ -770,7 +763,6 @@
 				state={inspector.status}
 				graph={inspector.graph}
 				list={inspector.list}
-				{pinned}
 				focusId={inspector.tokenId}
 				focusStep={inspector.step}
 				frozen={inspector.frozen}
@@ -778,7 +770,7 @@
 				flipping={trajectoryStore.stepPending}
 				atHorizon={trajectoryStore.t >= trajectoryStore.maxSteps}
 				onflip={handleFlip}
-				onclose={unpin}
+				onclose={closeInspector}
 				onpick={handleNeighborPick}
 				onloadmore={loadMoreNeighborList}
 			/>
@@ -796,7 +788,7 @@
 			class="undo-btn"
 			disabled={maxStep === 0 || trajectoryStore.t !== maxStep}
 			onclick={() => {
-				if (trajectoryStore.undo()) unpin();
+				if (trajectoryStore.undo()) closeInspector();
 			}}
 		>
 			Undo

@@ -41,7 +41,7 @@
 		</p>
 
 		<p>
-			Click a token to pin its inspector, then click a neighbour node to jump: exactly one row is
+			Click a token to open its inspector, then click a neighbour node to jump: exactly one row is
 			appended, the chosen token replaces that position, and every other token is copied. A random
 			<strong>Flip this token</strong> forces one position to take the active kernel's next-token
 			jump, and <strong>Diffuse one step</strong> samples every unfrozen position in order; both
@@ -49,11 +49,10 @@
 			scrubbed back discards the rows after it. The <strong>strategy</strong> picks which network
 			you walk — embedding neighbours, similar spellings, shared letters, WordNet relations — and
 			the
-			<strong>schedule</strong> sets the weights the inspector reads. Hover over a token to preview its
-			immediate neighbourhood, open the pinned inspector for every stored neighbour, or switch to the
-			graph view to see the whole network at once. Mixing strategies is where this is heading, not what
-			it does yet. The highlights show you which tokens moved most recently. Nothing is computed ahead:
-			your clicks decide the walk.
+			<strong>schedule</strong> sets the weights the inspector reads. Click a token to open its immediate
+			neighbourhood and every stored neighbour, or switch to the graph view to see the whole network at
+			once. Mixing strategies is where this is heading, not what it does yet. The highlights show you
+			which tokens moved most recently. Nothing is computed ahead: your clicks decide the walk.
 		</p>
 
 		<h3>What this is (and isn't)</h3>

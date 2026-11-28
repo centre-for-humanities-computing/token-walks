@@ -7,7 +7,7 @@
 	} from '$lib/workers/trajectory.protocol.js';
 
 	interface Props {
-		/** Viewport-space anchor point (top-left of the hovered token). */
+		/** Viewport-space anchor point (top-left of the clicked token). */
 		x: number;
 		y: number;
 		/**
@@ -20,8 +20,6 @@
 		graph: NeighborGraphData | null;
 		/** The stored-neighbourhood page below the graph, when available. */
 		list?: NeighborListPage | null;
-		/** True while a click pinned this inspector. */
-		pinned?: boolean;
 		/** Token id at the focused step; rings and ramps against it. */
 		focusId: number;
 		/** Step the graph was focused on. */
@@ -36,7 +34,7 @@
 		atHorizon?: boolean;
 		/** Force a jump to one next token at the focused position. */
 		onflip?: () => void;
-		/** Remove the pinned inspector. */
+		/** Close the inspector. */
 		onclose?: () => void;
 		/** Called with a neighbor's token id when it is jumped to. */
 		onpick?: (id: number) => void;
@@ -49,7 +47,6 @@
 		y,
 		state,
 		graph,
-		pinned = false,
 		focusId,
 		focusStep,
 		frozen = false,
@@ -81,10 +78,8 @@
 	});
 </script>
 
-<div class="token-dialog" class:pinned {style} role="tooltip">
-	{#if pinned}
-		<button class="close-btn" aria-label="Close inspector" onclick={() => onclose?.()}>×</button>
-	{/if}
+<div class="token-dialog" {style} role="dialog" aria-label="Token inspector">
+	<button class="close-btn" aria-label="Close inspector" onclick={() => onclose?.()}>×</button>
 	{#if state === 'loading'}
 		<p class="msg">Reading inspector…</p>
 	{:else if state === 'error'}
@@ -93,29 +88,27 @@
 		<p class="msg">Neighborhood not available for this strategy.</p>
 	{:else if graph}
 		<NeighborGraph {graph} {focusId} {focusStep} {onpick} />
-		{#if pinned && list?.hasNeighborhood}
+		{#if list?.hasNeighborhood}
 			<NeighborList page={list} {onpick} {onloadmore} />
 		{/if}
 	{/if}
-	{#if pinned}
-		<div class="pin-actions">
-			<button
-				class="flip-btn"
-				data-testid="flip-button"
-				disabled={frozen || atHorizon || flipping || state === 'loading' || state === 'error'}
-				title="Force a jump to one next token from the active kernel at this position"
-				onclick={() => onflip?.()}
-			>
-				Flip this token
-			</button>
-			{#if epsilon > 0}
-				<p class="note">The sample may leave the drawn graph because the kernel has an ε floor.</p>
-			{/if}
-			{#if frozen}
-				<p class="note">This position is frozen, so it cannot be flipped.</p>
-			{/if}
-		</div>
-	{/if}
+	<div class="pin-actions">
+		<button
+			class="flip-btn"
+			data-testid="flip-button"
+			disabled={frozen || atHorizon || flipping || state === 'loading' || state === 'error'}
+			title="Force a jump to one next token from the active kernel at this position"
+			onclick={() => onflip?.()}
+		>
+			Flip this token
+		</button>
+		{#if epsilon > 0}
+			<p class="note">The sample may leave the drawn graph because the kernel has an ε floor.</p>
+		{/if}
+		{#if frozen}
+			<p class="note">This position is frozen, so it cannot be flipped.</p>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -127,15 +120,8 @@
 		border-radius: 6px;
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 		padding: 8px;
-		pointer-events: none;
 		/* Long lists scroll inside the clamped dialog; no motion. */
 		overflow-y: auto;
-	}
-
-	/* A pinned inspector keeps receiving pointer events so it survives the
-	   pointer leaving the token and entering the dialog. */
-	.token-dialog.pinned {
-		pointer-events: auto;
 	}
 
 	.close-btn {
