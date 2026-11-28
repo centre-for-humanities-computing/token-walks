@@ -11,7 +11,7 @@
 		x: number;
 		y: number;
 		/**
-		 * Tooltip state: `loading` while querying, `ready` with a graph,
+		 * Dialog state: `loading` while querying, `ready` with a graph,
 		 * `error` when graph construction failed, `unavailable` when the
 		 * strategy has no neighborhood support.
 		 */
@@ -64,7 +64,7 @@
 	}: Props = $props();
 
 	const OFFSET = 12;
-	/** Tooltip width; position flips to the left when near the right edge. */
+	/** Dialog width; position flips to the left when near the right edge. */
 	const WIDTH = 380;
 
 	const style = $derived.by(() => {
@@ -81,7 +81,7 @@
 	});
 </script>
 
-<div class="token-tooltip" class:pinned {style} role="tooltip">
+<div class="token-dialog" class:pinned {style} role="tooltip">
 	{#if pinned}
 		<button class="close-btn" aria-label="Close inspector" onclick={() => onclose?.()}>×</button>
 	{/if}
@@ -119,7 +119,7 @@
 </div>
 
 <style>
-	.token-tooltip {
+	.token-dialog {
 		position: fixed;
 		z-index: 200;
 		background: #fff;
@@ -128,13 +128,13 @@
 		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 		padding: 8px;
 		pointer-events: none;
-		/* Long lists scroll inside the clamped tooltip; no motion. */
+		/* Long lists scroll inside the clamped dialog; no motion. */
 		overflow-y: auto;
 	}
 
 	/* A pinned inspector keeps receiving pointer events so it survives the
-	   pointer leaving the token and entering the tooltip. */
-	.token-tooltip.pinned {
+	   pointer leaving the token and entering the dialog. */
+	.token-dialog.pinned {
 		pointer-events: auto;
 	}
 
