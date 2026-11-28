@@ -61,20 +61,25 @@
 	}: Props = $props();
 
 	const OFFSET = 12;
-	/** Dialog width; position flips to the left when near the right edge. */
+	/** Preferred dialog width; capped to the viewport on narrow screens. */
 	const WIDTH = 380;
+	/** Room the dialog needs below the token before it flips above. */
+	const MIN_HEIGHT = 160;
 
 	const style = $derived.by(() => {
 		const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
 		const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
-		const flip = x + WIDTH + OFFSET > vw;
-		const left = flip ? x - WIDTH - OFFSET : x + OFFSET;
-		// Keep the pinned inspector inside the viewport: clamp its top up when
-		// there is too little room below, then let the content scroll.
-		const MIN_HEIGHT = 160;
-		const top = Math.min(y + OFFSET, Math.max(8, vh - MIN_HEIGHT - 8));
-		const maxHeight = Math.max(0, vh - top - 8);
-		return `left: ${left}px; top: ${top}px; width: ${WIDTH}px; max-height: ${maxHeight}px;`;
+		const width = Math.min(WIDTH, vw - 16);
+		// Flip left of the token near the right edge, then keep the left edge
+		// on screen so the right edge cannot leave it either.
+		const flip = x + width + OFFSET > vw;
+		const left = Math.max(8, flip ? x - width - OFFSET : x + OFFSET);
+		// Flip above the token when the room below is too small; anchor by
+		// `bottom` so the room above caps the scrolled content instead.
+		const flipY = y + OFFSET + MIN_HEIGHT + 8 > vh;
+		const vertical = flipY ? `bottom: ${vh - y + OFFSET}px;` : `top: ${y + OFFSET}px;`;
+		const maxHeight = flipY ? Math.max(0, y - OFFSET - 8) : Math.max(0, vh - y - OFFSET - 8);
+		return `left: ${left}px; ${vertical} width: ${width}px; max-height: ${maxHeight}px;`;
 	});
 </script>
 
@@ -114,6 +119,7 @@
 <style>
 	.token-dialog {
 		position: fixed;
+		box-sizing: border-box;
 		z-index: 200;
 		background: #fff;
 		border: 1px solid #ccc;
@@ -122,6 +128,19 @@
 		padding: 8px;
 		/* Long lists scroll inside the clamped dialog; no motion. */
 		overflow-y: auto;
+		/* A Svelte intro would not run on mount, so the open is a keyframe. */
+		animation: dialog-in 100ms ease-out;
+	}
+
+	@keyframes dialog-in {
+		from {
+			opacity: 0;
+			transform: translateY(2px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
 	}
 
 	.close-btn {
@@ -183,5 +202,11 @@
 		font-size: 0.7rem;
 		color: #555;
 		font-family: system-ui, sans-serif;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.token-dialog {
+			animation: none;
+		}
 	}
 </style>

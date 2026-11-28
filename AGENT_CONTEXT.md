@@ -38,7 +38,7 @@ to follow slavishly.
 - **No graph framework.** The full-graph view uses a hand-written Canvas 2D
   renderer (pan/zoom camera math in `engine/camera.ts`, progressive reveal,
   occupancy in `components/FullGraph.svelte`) with a
-  grid-accelerated force layout in a worker; the hover tooltip keeps its
+  grid-accelerated force layout in a worker; the token dialog keeps its
   plain-SVG graph. Cytoscape.js was considered and not needed.
 - **RNG**: `seedrandom` (Alea algorithm) for reproducible seeded randomness.
 
@@ -88,7 +88,7 @@ any schedule.
 - Schedules: linear, cosine, constant. Mutual-information-based is future work.
 - Time slider that scrubs smoothly through $[0, T]$.
 - Prose, token-chip, and full token-graph display modes.
-- Token inspector on hover showing the local transition distribution and a
+- Token inspector on click showing the local transition distribution and a
   neighbour graph.
 - Diagnostics panel showing connectivity and stationary-distribution info
   (future work).
